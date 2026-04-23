@@ -4,7 +4,7 @@ import './PlayerOverlay.css';
 
 export default function PlayerOverlay({ videoId, startTime, duration, active, onEnded }) {
   const containerRef = useRef(null);
-  const { isReady, play, stop } = useYouTubePlayer(containerRef);
+  const { isReady, cue, play, stop } = useYouTubePlayer(containerRef);
 
   const [hasStarted,  setHasStarted]  = useState(false);
   const [isPlaying,   setIsPlaying]   = useState(false);
@@ -19,6 +19,12 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
     setSecondsLeft(null);
     stop();
   }, [videoId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Phase 1 — pre-buffer as soon as the player is ready and we have a video.
+  // No user gesture needed for cueVideoById; this maximises buffer before the tap.
+  useEffect(() => {
+    if (isReady && videoId && active) cue(videoId, startTime);
+  }, [isReady, videoId, startTime, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stop if parent deactivates mid-clip.
   useEffect(() => { if (!active) stop(); }, [active]); // eslint-disable-line
@@ -44,13 +50,14 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
   const handleTapPlay = useCallback(() => {
     if (!isReady || !videoId || !active || hasStarted) return;
     setHasStarted(true);
+    // Phase 2 — video is already buffered via cue(); just press play.
     play(
-      videoId, startTime, duration,
+      duration,
       () => { setIsPlaying(false); onEnded?.(); },
       () => { setIsPlaying(true); setSecondsLeft(duration); },
       () => { setHasError(true); },
     );
-  }, [isReady, videoId, startTime, duration, active, hasStarted, play, onEnded]);
+  }, [isReady, videoId, active, hasStarted, play, onEnded, duration]);
 
   return (
     <div className={`player-overlay${active ? ' player-overlay--active' : ''}`}>
