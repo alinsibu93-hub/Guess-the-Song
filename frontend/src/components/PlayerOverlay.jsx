@@ -63,9 +63,25 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
 
   return (
     <div className={`player-overlay${active ? ' player-overlay--active' : ''}`}>
+      {/*
+        * Iframe must stay within the visible viewport — Chrome blocks autoplay
+        * for elements positioned outside it (left:-9999px counts as "invisible").
+        * opacity:0 + pointer-events:none keeps it invisible to the user while
+        * remaining "in viewport" for Chrome's autoplay policy check.
+        */}
       <div
         ref={containerRef}
-        style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          opacity: 0,
+          pointerEvents: 'none',
+          zIndex: -1,
+        }}
         aria-hidden="true"
       />
 

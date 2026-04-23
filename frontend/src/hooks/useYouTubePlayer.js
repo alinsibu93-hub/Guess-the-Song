@@ -5,35 +5,34 @@ let ytApiPromise = null;
 
 function loadYouTubeIframeApi() {
   if (ytApiPromise) return ytApiPromise;
-
   ytApiPromise = new Promise((resolve) => {
     if (window.YT?.Player) { resolve(); return; }
-
-    const previous = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => { previous?.(); resolve(); };
-
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { prev?.(); resolve(); };
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(tag);
   });
-
   return ytApiPromise;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────
 /**
  * play(videoId, startTime, duration, onEnded, onPlaybackStarted)
- *   - onEnded:          called when the clip window expires
- *   - onPlaybackStarted called on the FIRST PLAYING event after play() —
- *                       use this to start the visible countdown in sync with audio
  *
- * Only the FIRST PLAYING event per play() call starts the timer.
- * Subsequent PLAYING events (e.g. from YouTube auto-resume) are ignored.
+ * Timer strategy:
+ *   Primary   — starts when onStateChange(PLAYING) fires (audio is confirmed)
+ *   Fallback  — starts 4 s after play() in case PLAYING event never arrives
+ *               (Chrome sometimes suppresses it for off-screen iframes)
+ *
+ * consumed flag: only the FIRST PLAYING event per play() call is handled,
+ * preventing stale events from a previous round restarting the timer.
  */
 export function useYouTubePlayer(containerRef) {
-  const playerRef      = useRef(null);
-  const stopTimerRef   = useRef(null);
-  const clipRef        = useRef(null);  // { duration, onEnded, onPlaybackStarted, consumed }
+  const playerRef    = useRef(null);
+  const stopTimerRef = useRef(null);
+  const fallbackRef  = useRef(null);
+  const clipRef      = useRef(null); // { duration, onEnded, onPlaybackStarted, consumed }
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -64,20 +63,17 @@ export function useYouTubePlayer(containerRef) {
           },
 
           onStateChange: (e) => {
-            if (e.data !== window.YT.PlayerState.PLAYING) return;
+            // Only handle the first PLAYING event per play() call.
+            if (e.data !== 1 /* PLAYING */) return;
             if (!clipRef.current || clipRef.current.consumed) return;
 
-            // Mark consumed so only the FIRST PLAYING event per play() call
-            // starts the timer. Stale events from previous rounds are ignored.
             clipRef.current.consumed = true;
+            clearTimeout(fallbackRef.current); // primary path — cancel fallback
 
             e.target.unMute();
             e.target.setVolume(100);
 
             const { duration, onEnded, onPlaybackStarted } = clipRef.current;
-
-            // Signal PlayerOverlay that audio has actually started — it can
-            // now start the visible countdown in sync with real playback.
             onPlaybackStarted?.();
 
             clearTimeout(stopTimerRef.current);
@@ -88,13 +84,9 @@ export function useYouTubePlayer(containerRef) {
             }, duration * 1000);
           },
 
-          onError: (e) => {
-            console.warn('[YouTube] Player error code:', e.data);
-            // Advance game on error so the user is never stuck on a broken clip.
-            if (clipRef.current) {
-              clipRef.current.onEnded?.();
-              clipRef.current = null;
-            }
+          onError: () => {
+            // Advance the game so the user is never stuck on an unplayable clip.
+            _advanceFromClip();
           },
         },
       });
@@ -103,26 +95,56 @@ export function useYouTubePlayer(containerRef) {
     return () => {
       destroyed = true;
       clearTimeout(stopTimerRef.current);
+      clearTimeout(fallbackRef.current);
       try { playerRef.current?.destroy(); } catch (_) {}
       playerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Shared helper — fires onPlaybackStarted + onEnded immediately (fallback/error path).
+  function _advanceFromClip() {
+    if (!clipRef.current) return;
+    clearTimeout(stopTimerRef.current);
+    clearTimeout(fallbackRef.current);
+    const { onEnded, onPlaybackStarted, consumed } = clipRef.current;
+    clipRef.current = null;
+    if (!consumed) onPlaybackStarted?.(); // show waveform briefly
+    onEnded?.();
+  }
+
   const play = useCallback((videoId, startTime, duration, onEnded, onPlaybackStarted) => {
     if (!playerRef.current) return;
 
     clearTimeout(stopTimerRef.current);
-    // consumed: false — only the first PLAYING event for this clip is handled
+    clearTimeout(fallbackRef.current);
     clipRef.current = { duration, onEnded, onPlaybackStarted, consumed: false };
 
     playerRef.current.unMute();
     playerRef.current.setVolume(100);
     playerRef.current.loadVideoById({ videoId, startSeconds: startTime });
+
+    // Fallback: if onStateChange(PLAYING) never fires within 4 s (e.g. because
+    // Chrome suppressed the event for the off-screen iframe), force-start the
+    // countdown and timer so the user is never stuck at "Se încarcă...".
+    fallbackRef.current = setTimeout(() => {
+      if (!clipRef.current || clipRef.current.consumed) return;
+      clipRef.current.consumed = true;
+
+      try { playerRef.current?.unMute(); playerRef.current?.setVolume(100); } catch (_) {}
+      clipRef.current.onPlaybackStarted?.();
+
+      stopTimerRef.current = setTimeout(() => {
+        try { playerRef.current?.pauseVideo(); } catch (_) {}
+        clipRef.current = null;
+        onEnded?.();
+      }, duration * 1000);
+    }, 4000);
   }, []);
 
   const stop = useCallback(() => {
     clearTimeout(stopTimerRef.current);
+    clearTimeout(fallbackRef.current);
     clipRef.current = null;
     try { playerRef.current?.pauseVideo(); } catch (_) {}
   }, []);
