@@ -19,7 +19,7 @@
     Referrer-Policy        = "strict-origin-when-cross-origin"
     # Allow YouTube IFrame API to load and autoplay via postMessage.
     # 'unsafe-inline' on script-src is required by the YouTube IFrame bootstrap.
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com; frame-src https://www.youtube.com; connect-src 'self' VITE_API_PLACEHOLDER; img-src 'self' data: https://i.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com; frame-src https://www.youtube.com; connect-src 'self' https://guess-the-song-dw07.onrender.com; img-src 'self' data: https://i.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com"
 
 # Static assets — aggressive caching (fingerprinted by Vite).
 [[headers]]
