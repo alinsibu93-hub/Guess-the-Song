@@ -59,8 +59,11 @@ export function useYouTubePlayer(containerRef) {
         },
         events: {
           onReady: (e) => {
-            e.target.unMute();
-            e.target.setVolume(100);
+            // Start muted — Chrome always allows muted autoplay regardless of
+            // MEI score, gesture context, or iframe visibility rules.
+            // We unmute in onStateChange(PLAYING) once video is confirmed playing.
+            e.target.mute();
+            e.target.setVolume(100); // volume ready for when we unmute
             if (!destroyed) setIsReady(true);
           },
 
@@ -71,6 +74,8 @@ export function useYouTubePlayer(containerRef) {
             clipRef.current.consumed = true;
             clearTimeout(fallbackRef.current);
 
+            // Unmute here — this is the reliable moment. Chrome already allowed
+            // the muted playback; switching to unmuted mid-play is always permitted.
             e.target.unMute();
             e.target.setVolume(100);
 
@@ -115,8 +120,9 @@ export function useYouTubePlayer(containerRef) {
     clearTimeout(fallbackRef.current);
     clipRef.current = { duration, onEnded, onPlaybackStarted, consumed: false };
 
-    playerRef.current.unMute();
-    playerRef.current.setVolume(100);
+    // Load muted — Chrome allows muted autoplay unconditionally.
+    // onStateChange(PLAYING) will unmute once playback is confirmed.
+    playerRef.current.mute();
     playerRef.current.loadVideoById({ videoId, startSeconds: startTime });
 
     // Fallback if PLAYING event never fires (e.g. video unavailable).
