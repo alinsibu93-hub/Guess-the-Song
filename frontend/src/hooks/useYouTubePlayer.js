@@ -59,11 +59,20 @@ export function useYouTubePlayer(containerRef) {
         },
         events: {
           onReady: (e) => {
-            // Start muted — Chrome always allows muted autoplay regardless of
-            // MEI score, gesture context, or iframe visibility rules.
-            // We unmute in onStateChange(PLAYING) once video is confirmed playing.
-            e.target.mute();
-            e.target.setVolume(100); // volume ready for when we unmute
+            // Explicitly add allow="autoplay" to the iframe Chrome created.
+            // This delegates the parent page's user-gesture context to the iframe,
+            // allowing unmuted playback after the user taps "▶ Ascultă".
+            try {
+              const iframe = e.target.getIframe();
+              if (iframe) {
+                iframe.setAttribute(
+                  'allow',
+                  'autoplay; encrypted-media; gyroscope; picture-in-picture',
+                );
+              }
+            } catch (_) {}
+            e.target.unMute();
+            e.target.setVolume(100);
             if (!destroyed) setIsReady(true);
           },
 
@@ -74,8 +83,6 @@ export function useYouTubePlayer(containerRef) {
             clipRef.current.consumed = true;
             clearTimeout(fallbackRef.current);
 
-            // Unmute here — this is the reliable moment. Chrome already allowed
-            // the muted playback; switching to unmuted mid-play is always permitted.
             e.target.unMute();
             e.target.setVolume(100);
 
@@ -122,9 +129,10 @@ export function useYouTubePlayer(containerRef) {
     clearTimeout(fallbackRef.current);
     clipRef.current = { duration, onEnded, onPlaybackStarted, onPlayError, consumed: false };
 
-    // Load muted — Chrome allows muted autoplay unconditionally.
-    // onStateChange(PLAYING) will unmute once playback is confirmed.
-    playerRef.current.mute();
+    // Unmuted — allow="autoplay" on the iframe (set in onReady) delegates the
+    // parent page's tap gesture to the iframe, so Chrome permits unmuted play.
+    playerRef.current.unMute();
+    playerRef.current.setVolume(100);
     playerRef.current.loadVideoById({ videoId, startSeconds: startTime });
 
     // Fallback if PLAYING event never fires (e.g. video unavailable).
