@@ -185,7 +185,8 @@ class YouTubeService:
             "part": "snippet",
             "q": query,
             "type": "video",
-            "videoCategoryId": "10",  # Music category
+            "videoCategoryId": "10",   # Music category
+            "videoEmbeddable": "true", # Exclude videos owners blocked from embedding (error 150/151)
             "maxResults": max_results,
             "key": self.api_key,
         }
