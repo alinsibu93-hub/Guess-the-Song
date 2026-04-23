@@ -21,10 +21,19 @@ function loadYouTubeIframeApi() {
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────
+/**
+ * play(videoId, startTime, duration, onEnded, onPlaybackStarted)
+ *   - onEnded:          called when the clip window expires
+ *   - onPlaybackStarted called on the FIRST PLAYING event after play() —
+ *                       use this to start the visible countdown in sync with audio
+ *
+ * Only the FIRST PLAYING event per play() call starts the timer.
+ * Subsequent PLAYING events (e.g. from YouTube auto-resume) are ignored.
+ */
 export function useYouTubePlayer(containerRef) {
-  const playerRef    = useRef(null);
-  const stopTimerRef = useRef(null);
-  const clipInfoRef  = useRef(null); // { duration, onEnded } — set by play(), read by onStateChange
+  const playerRef      = useRef(null);
+  const stopTimerRef   = useRef(null);
+  const clipRef        = useRef(null);  // { duration, onEnded, onPlaybackStarted, consumed }
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -37,47 +46,55 @@ export function useYouTubePlayer(containerRef) {
         width: '1',
         height: '1',
         playerVars: {
-          controls:        0,
-          disablekb:       1,
-          fs:              0,
-          iv_load_policy:  3,
-          modestbranding:  1,
-          rel:             0,
-          autoplay:        1,   // lets loadVideoById play immediately
-          playsinline:     1,   // required for iOS inline audio
-          origin:          window.location.origin,
+          controls:       0,
+          disablekb:      1,
+          fs:             0,
+          iv_load_policy: 3,
+          modestbranding: 1,
+          rel:            0,
+          autoplay:       1,
+          playsinline:    1,
+          origin:         window.location.origin,
         },
         events: {
           onReady: (e) => {
-            // Force unmute on creation — Chrome mutes players on new/low-MEI sites.
             e.target.unMute();
             e.target.setVolume(100);
             if (!destroyed) setIsReady(true);
           },
 
           onStateChange: (e) => {
-            if (e.data === window.YT.PlayerState.PLAYING) {
-              // Timer starts here — from actual playback start, not from the API call.
-              // This skips buffering time so the user hears the full clip duration.
-              e.target.unMute();
-              e.target.setVolume(100);
+            if (e.data !== window.YT.PlayerState.PLAYING) return;
+            if (!clipRef.current || clipRef.current.consumed) return;
 
-              if (clipInfoRef.current) {
-                const { duration, onEnded } = clipInfoRef.current;
-                clearTimeout(stopTimerRef.current);
-                stopTimerRef.current = setTimeout(() => {
-                  try { playerRef.current?.pauseVideo(); } catch (_) {}
-                  onEnded?.();
-                }, duration * 1000);
-              }
-            }
+            // Mark consumed so only the FIRST PLAYING event per play() call
+            // starts the timer. Stale events from previous rounds are ignored.
+            clipRef.current.consumed = true;
+
+            e.target.unMute();
+            e.target.setVolume(100);
+
+            const { duration, onEnded, onPlaybackStarted } = clipRef.current;
+
+            // Signal PlayerOverlay that audio has actually started — it can
+            // now start the visible countdown in sync with real playback.
+            onPlaybackStarted?.();
+
+            clearTimeout(stopTimerRef.current);
+            stopTimerRef.current = setTimeout(() => {
+              try { playerRef.current?.pauseVideo(); } catch (_) {}
+              clipRef.current = null;
+              onEnded?.();
+            }, duration * 1000);
           },
 
           onError: (e) => {
             console.warn('[YouTube] Player error code:', e.data);
-            // On error, still advance the game so the user isn't stuck.
-            clipInfoRef.current?.onEnded?.();
-            clipInfoRef.current = null;
+            // Advance game on error so the user is never stuck on a broken clip.
+            if (clipRef.current) {
+              clipRef.current.onEnded?.();
+              clipRef.current = null;
+            }
           },
         },
       });
@@ -92,15 +109,12 @@ export function useYouTubePlayer(containerRef) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Load and play a clip. The stop timer starts only once onStateChange
-   * fires with PLAYING — so buffering time is not counted against the clip.
-   */
-  const play = useCallback((videoId, startTime, duration, onEnded) => {
+  const play = useCallback((videoId, startTime, duration, onEnded, onPlaybackStarted) => {
     if (!playerRef.current) return;
 
     clearTimeout(stopTimerRef.current);
-    clipInfoRef.current = { duration, onEnded };
+    // consumed: false — only the first PLAYING event for this clip is handled
+    clipRef.current = { duration, onEnded, onPlaybackStarted, consumed: false };
 
     playerRef.current.unMute();
     playerRef.current.setVolume(100);
@@ -109,7 +123,7 @@ export function useYouTubePlayer(containerRef) {
 
   const stop = useCallback(() => {
     clearTimeout(stopTimerRef.current);
-    clipInfoRef.current = null;
+    clipRef.current = null;
     try { playerRef.current?.pauseVideo(); } catch (_) {}
   }, []);
 
