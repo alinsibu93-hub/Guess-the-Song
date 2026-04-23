@@ -1,0 +1,157 @@
+/* ── Reset ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+html {
+  /* Prevent layout shift from scrollbar appearing */
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  background-color: var(--clr-bg);
+  color: var(--clr-text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Center the single-column app */
+  display: flex;
+  justify-content: center;
+}
+
+/* ── App shell ────────────────────────────────────────────────────────────── */
+.app {
+  width: 100%;
+  max-width: var(--max-width);
+  padding: var(--space-6) var(--page-px) var(--space-12);
+  min-height: 100vh;
+}
+
+/* ── Typography ───────────────────────────────────────────────────────────── */
+h1, h2, h3 {
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+/* ── Interactive elements reset ───────────────────────────────────────────── */
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--text-base);
+  border: none;
+  background: none;
+  color: inherit;
+  border-radius: var(--radius-md);
+}
+
+input, select, textarea {
+  font-family: inherit;
+  font-size: var(--text-base);
+  color: var(--clr-text);
+  background: var(--clr-surface);
+  border: 1.5px solid var(--clr-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  width: 100%;
+  transition: border-color var(--trans-fast), box-shadow var(--trans-fast);
+  outline: none;
+}
+
+input:focus, select:focus {
+  border-color: var(--clr-primary);
+  box-shadow: 0 0 0 3px var(--clr-primary-glow-sm);
+}
+
+input:disabled, select:disabled, button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+label {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--clr-text-secondary);
+  margin-bottom: var(--space-2);
+  font-weight: var(--weight-medium);
+}
+
+/* ── Shared utility classes ───────────────────────────────────────────────── */
+
+/* Spinner — shared by multiple components */
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--clr-border);
+  border-top-color: var(--clr-primary);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  margin: var(--space-6) auto;
+}
+
+.spinner--sm {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border-width: 2px;
+  margin: 0 var(--space-2) 0 0;
+  vertical-align: middle;
+  animation: spin 0.75s linear infinite;
+  border: 2px solid var(--clr-border);
+  border-top-color: var(--clr-primary);
+  border-radius: 50%;
+}
+
+/* Generic card surface */
+.card {
+  background: var(--clr-surface);
+  border: 1.5px solid var(--clr-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Error states ─────────────────────────────────────────────────────────── */
+.error-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding-top: var(--space-12);
+  text-align: center;
+}
+
+.error-screen .error-icon   { font-size: 2.5rem; }
+.error-screen .error-message { color: var(--clr-wrong); max-width: 280px; line-height: 1.6; }
+
+.error-screen .error-btn {
+  background: var(--clr-surface-raised);
+  border: 1.5px solid var(--clr-border);
+  color: var(--clr-text);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-medium);
+  transition: background var(--trans-fast), border-color var(--trans-fast);
+}
+.error-screen .error-btn:hover { background: var(--clr-surface-hover); border-color: var(--clr-primary); }
+
+.error-toast {
+  background: rgba(255, 71, 87, 0.1);
+  border: 1px solid var(--clr-wrong-border);
+  color: #ff8a94;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+  animation: slideDown 0.2s var(--trans-normal);
+}
+
+/* ── Mobile ───────────────────────────────────────────────────────────────── */
+@media (max-width: 400px) {
+  :root { --page-px: 0.75rem; }
+}

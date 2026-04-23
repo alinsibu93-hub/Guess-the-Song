@@ -1,15 +1,11 @@
-# Core HTTP / API
+# HTTP client for YouTube Data API v3 calls
 requests>=2.31.0
 
-# Audio (at least one backend required)
-pygame>=2.5.0           # primary backend — handles MP3 natively
+# REST API framework
+flask>=3.0.0
 
-# Optional alternative backend (needs ffmpeg on PATH for MP3)
-# simpleaudio>=1.0.4
-# pydub>=0.25.1
+# Cross-Origin Resource Sharing — required for browser clients
+flask-cors>=4.0.0
 
-# Spotify helper (optional — we use direct REST calls, but spotipy is handy for exploration)
-# spotipy>=2.23.0
-
-# .env file support (optional — credentials can also be exported as env vars)
+# .env file support (credentials can also be exported as env vars)
 python-dotenv>=1.0.0

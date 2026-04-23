@@ -1,0 +1,160 @@
+/* ── Start Screen ─────────────────────────────────────────────────────────── */
+.start-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  padding-top: var(--space-8);
+  animation: fadeSlideUp 0.35s var(--trans-normal);
+}
+
+.start-screen h1 {
+  font-size: var(--text-4xl);
+  font-weight: var(--weight-black);
+  color: var(--clr-text);
+  text-align: center;
+}
+
+.subtitle {
+  font-size: var(--text-base);
+  color: var(--clr-text-secondary);
+  text-align: center;
+  margin-top: calc(var(--space-2) * -1);
+}
+
+/* ── Form ─────────────────────────────────────────────────────────────────── */
+.start-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+}
+
+/* ── Fieldset — wraps radio groups ───────────────────────────────────────── */
+.start-form fieldset {
+  border: 1.5px solid var(--clr-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.start-form legend {
+  padding: 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--clr-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── Radio row ────────────────────────────────────────────────────────────── */
+.radio-label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+.radio-label input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  accent-color: var(--clr-primary);
+  cursor: pointer;
+  /* Override base reset — radios don't need the full-width treatment */
+  width: auto;
+  border: none;
+  padding: 0;
+  background: transparent;
+  transition: none;
+}
+
+.radio-label input[type="radio"]:focus {
+  box-shadow: 0 0 0 3px var(--clr-primary-glow-sm);
+  border-radius: 50%;
+  outline: none;
+}
+
+.radio-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-base);
+  color: var(--clr-text);
+  font-weight: var(--weight-medium);
+  line-height: 1.3;
+}
+
+.radio-hint {
+  font-size: var(--text-xs);
+  color: var(--clr-text-muted);
+  font-weight: var(--weight-normal);
+}
+
+/* ── Error message inside form ────────────────────────────────────────────── */
+.form-error {
+  font-size: var(--text-sm);
+  color: #ff8a94;
+  background: var(--clr-wrong-bg);
+  border: 1px solid var(--clr-wrong-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  animation: slideDown 0.2s var(--trans-normal);
+}
+
+/* ── Start button ─────────────────────────────────────────────────────────── */
+.start-btn {
+  padding: var(--space-4) var(--space-8);
+  background: var(--clr-primary);
+  color: var(--clr-text-inverse);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  border-radius: var(--radius-md);
+  border: none;
+  transition:
+    background var(--trans-fast),
+    box-shadow var(--trans-fast),
+    transform var(--trans-fast);
+}
+
+.start-btn:hover {
+  background: var(--clr-primary-hover);
+  box-shadow: var(--shadow-primary);
+  transform: translateY(-2px);
+}
+
+.start-btn:active {
+  transform: translateY(0);
+  animation: clickBounce 0.15s var(--trans-fast);
+}
+
+/* ── Loading state ────────────────────────────────────────────────────────── */
+.start-screen--loading {
+  gap: var(--space-4);
+}
+
+.loading-msg {
+  font-size: var(--text-base);
+  color: var(--clr-text-secondary);
+  text-align: center;
+  animation: fadeSlideUp 0.3s var(--trans-normal);
+}
+
+.cancel-btn {
+  font-size: var(--text-sm);
+  color: var(--clr-text-muted);
+  border: 1px solid var(--clr-border);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  transition: color var(--trans-fast), border-color var(--trans-fast);
+  animation: fadeSlideUp 0.3s var(--trans-normal);
+}
+
+.cancel-btn:hover {
+  color: var(--clr-text);
+  border-color: var(--clr-text-muted);
+}

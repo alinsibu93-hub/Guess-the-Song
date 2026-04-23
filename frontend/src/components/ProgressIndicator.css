@@ -1,0 +1,52 @@
+/* ── Progress Indicator ───────────────────────────────────────────────────── */
+.progress-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+/* ── Meta row: round label ← → score ─────────────────────────────────────── */
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.progress-round {
+  font-size: var(--text-sm);
+  color: var(--clr-text-secondary);
+}
+
+.progress-round strong {
+  color: var(--clr-text);
+  font-weight: var(--weight-semibold);
+}
+
+.progress-score {
+  font-size: var(--text-sm);
+  color: var(--clr-text-secondary);
+}
+
+.progress-score strong {
+  color: var(--clr-primary-light);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Track ────────────────────────────────────────────────────────────────── */
+.progress-bar {
+  height: 5px;
+  background: var(--clr-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+/* ── Fill — width set inline; CSS handles the transition ─────────────────── */
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--clr-primary), var(--clr-primary-light));
+  border-radius: var(--radius-full);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: left center;
+}

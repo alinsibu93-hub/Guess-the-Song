@@ -1,0 +1,895 @@
+openapi: "3.0.3"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GUESS THE SONG — OpenAPI 3.0 specification
+#
+# Design decisions worth noting:
+#
+# 1. SESSION MODEL — stateful server, stateless HTTP.
+#    The server keeps session state in memory (TTL 1 h). The client carries
+#    only the sessionId. This is the simplest viable approach for a single-node
+#    deployment; replace with Redis/DB for multi-instance.
+#
+# 2. TWO ANSWER MODES (mode field on session).
+#    multiple_choice — client sends choiceIndex; all-or-nothing scoring.
+#    free_text       — client sends title + artist; partial-match scoring.
+#    The mode is set at game creation and fixed for the whole session.
+#
+# 3. VIDEO DATA IS READ-ONLY.
+#    The backend resolves a YouTube videoId for each song and stores it.
+#    Playback is 100% client-side (YouTube IFrame Player API). The backend
+#    never downloads or streams audio/video.
+#
+# 4. TITLE/ARTIST ARE HIDDEN UNTIL ANSWER.
+#    GET /round intentionally omits the correct title and artist to prevent
+#    spoilers. They are revealed only in POST /answer and GET /results.
+#
+# 5. CHOICES ARE GENERATED SERVER-SIDE.
+#    Wrong options for multiple_choice are drawn from the same song library,
+#    shuffled server-side. The correct answer is always included but in a
+#    random position. The client must not assume any position is correct.
+#
+# 6. EXTENSIBILITY.
+#    Tags, schemas and path structure leave room for: auth (bearer token on
+#    all /api/game/* routes), leaderboard (/api/leaderboard), daily challenge
+#    (/api/challenge/today), and replay (/api/game/{id}/replay).
+# ─────────────────────────────────────────────────────────────────────────────
+
+info:
+  title: Guess the Song API
+  version: "1.0.0"
+  description: |
+    REST API for the **Guess the Song** browser game.
+
+    ### How a game works
+    1. `POST /api/game/new` — create a session, receive `sessionId`.
+    2. `GET /api/game/{sessionId}/round` — get the current round's YouTube
+       `videoId`, `startTime`, and `duration`. Load the video in the IFrame
+       Player, seek to `startTime`, play for `duration` seconds, then pause.
+    3. `POST /api/game/{sessionId}/answer` — submit the player's guess. The
+       response reveals the correct title, artist, and points earned.
+    4. Repeat steps 2–3 until `gameComplete: true`.
+    5. `GET /api/game/{sessionId}/results` — full scoreboard.
+
+    ### Answer modes
+    | Mode | Request body | Scoring |
+    |---|---|---|
+    | `multiple_choice` | `{ "choiceIndex": N }` | All-or-nothing (150 pts max) |
+    | `free_text` | `{ "title": "...", "artist": "..." }` | Partial match allowed (100 + 50 pts) |
+
+    ### Session lifetime
+    Sessions expire after **1 hour of inactivity** and are stored in-memory
+    (server restart clears all sessions).
+
+  contact:
+    name: Backend Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+  - url: https://api.example.com
+    description: "Production server — REPLACE THIS with your actual domain before sharing this spec"
+
+tags:
+  - name: system
+    description: Health and diagnostic endpoints
+  - name: game
+    description: Game session lifecycle — create, play, score
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Health ─────────────────────────────────────────────────────────────────
+
+  /api/health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      summary: Liveness check
+      description: |
+        Returns `{ "status": "ok" }` when the server is running.
+        Use this for load-balancer health checks or uptime monitors.
+      responses:
+        "200":
+          description: Server is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+
+
+  # ── Game session ────────────────────────────────────────────────────────────
+
+  /api/game/new:
+    post:
+      tags: [game]
+      operationId: createGame
+      summary: Create a new game session
+      description: |
+        Fetches `rounds` songs from YouTube, generates multiple-choice options,
+        and returns a `sessionId` to be used in all subsequent calls.
+
+        The YouTube search is performed synchronously during this call — expect
+        1–3 s latency per round on first run (results are not cached).
+
+        **YouTube quota cost:** each round requires 1–2 search API calls at
+        100 quota units each. A 20-round game costs up to **4 000 units**.
+        The free daily quota is **10 000 units** (~2–5 games/day). A quota
+        breach returns HTTP 429 immediately.
+
+        **Difficulty effects on timing hints sent to the client:**
+        | Difficulty | `clipDuration` | `roundTimeout` |
+        |---|---|---|
+        | `easy` | 15 s | 20 s |
+        | `normal` | 8 s | 10 s |
+        | `hard` | 3 s | 7 s |
+
+        The backend does not enforce the timer — the client is responsible for
+        stopping playback and submitting within `roundTimeout`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewGameRequest"
+            examples:
+              defaults:
+                summary: All defaults (5 rounds, normal, multiple_choice)
+                value: {}
+              custom:
+                summary: Hard mode, free text, 10 rounds
+                value:
+                  rounds: 10
+                  difficulty: hard
+                  mode: free_text
+      responses:
+        "201":
+          description: Session created. Use `sessionId` in all subsequent requests.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameSession"
+              example:
+                sessionId: "550e8400-e29b-41d4-a716-446655440000"
+                totalRounds: 5
+                difficulty: normal
+                mode: multiple_choice
+                clipDuration: 8
+                roundTimeout: 10
+        "400":
+          description: Invalid request parameters.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                bad_rounds:
+                  value:
+                    error: "'rounds' must be between 1 and 20"
+                bad_difficulty:
+                  value:
+                    error: "'difficulty' must be one of: easy, normal, hard"
+                bad_mode:
+                  value:
+                    error: "'mode' must be one of: multiple_choice, free_text"
+        "401":
+          description: YouTube API key is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "YouTube API returned 403. Check that your API key is valid."
+        "429":
+          description: YouTube Data API daily quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "YouTube Data API daily quota exceeded. Wait until midnight Pacific time."
+        "502":
+          description: YouTube is unreachable or returned too few results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Could only find 3 tracks from YouTube, needed 5."
+
+
+  /api/game/{sessionId}/round:
+    get:
+      tags: [game]
+      operationId: getRound
+      summary: Get the current round
+      description: |
+        Returns the data needed to present the current round to the player.
+
+        **Important:** `title` and `artist` are intentionally absent to prevent
+        spoilers. They are revealed only after submitting an answer.
+
+        When all rounds have been answered the response shape changes:
+        ```json
+        { "finished": true, "totalRounds": 5 }
+        ```
+        In that case navigate the player to `GET /results`.
+
+        In `multiple_choice` mode the response includes a `choices` array of
+        4 shuffled options (one correct, three distractors). The client must
+        not infer which option is correct from its position.
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: |
+            Active round data, or a finished indicator when all rounds are done.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/RoundData"
+                  - $ref: "#/components/schemas/GameFinished"
+              examples:
+                active_multiple_choice:
+                  summary: Active round — multiple_choice mode
+                  value:
+                    roundNumber: 2
+                    totalRounds: 5
+                    videoId: JGwWNGJdvx8
+                    startTime: 42
+                    duration: 7
+                    thumbnail: "https://img.youtube.com/vi/JGwWNGJdvx8/default.jpg"
+                    mode: multiple_choice
+                    choices:
+                      - title: Shape of You
+                        artist: Ed Sheeran
+                      - title: Yellow
+                        artist: Coldplay
+                      - title: Rolling in the Deep
+                        artist: Adele
+                      - title: Blinding Lights
+                        artist: The Weeknd
+                active_free_text:
+                  summary: Active round — free_text mode
+                  value:
+                    roundNumber: 1
+                    totalRounds: 5
+                    videoId: hT_nvWreIhg
+                    startTime: 55
+                    duration: 6
+                    thumbnail: null
+                    mode: free_text
+                game_finished:
+                  summary: All rounds answered
+                  value:
+                    finished: true
+                    totalRounds: 5
+        "404":
+          description: Session not found or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Session not found"
+
+
+  /api/game/{sessionId}/answer:
+    post:
+      tags: [game]
+      operationId: submitAnswer
+      summary: Submit the player's answer for the current round
+      description: |
+        Evaluates the player's guess and advances to the next round.
+
+        **multiple_choice mode** — send `choiceIndex` (0-based index into the
+        `choices` array from `GET /round`). Picking the correct song gives
+        full points (title + artist); wrong choice gives 0.
+
+        **free_text mode** — send `title` (required) and optionally `artist`.
+        Title matching is case-insensitive and supports partial matches
+        (Levenshtein ratio ≥ 0.6). Artist matching requires at least one
+        meaningful word (>2 chars) to overlap. Points are awarded independently:
+        100 for title, 50 bonus for artist.
+
+        Sending the wrong field for the session mode returns `400 Wrong mode`.
+
+        The response always reveals `correctTitle`, `correctArtist`, and
+        `videoId` so the client can show a reveal screen after each round.
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/AnswerRequestMultipleChoice"
+                - $ref: "#/components/schemas/AnswerRequestFreeText"
+            examples:
+              multiple_choice:
+                summary: Multiple choice — player picked index 2
+                value:
+                  choiceIndex: 2
+              free_text_full:
+                summary: Free text — title + artist
+                value:
+                  title: Shape of You
+                  artist: Ed Sheeran
+              free_text_title_only:
+                summary: Free text — title only (no artist bonus)
+                value:
+                  title: Yellow
+      responses:
+        "200":
+          description: Answer evaluated. Round advanced.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnswerResult"
+              examples:
+                correct:
+                  summary: Correct guess — full points
+                  value:
+                    roundNumber: 2
+                    titleCorrect: true
+                    artistCorrect: true
+                    correctTitle: Shape of You
+                    correctArtist: Ed Sheeran
+                    videoId: JGwWNGJdvx8
+                    pointsEarned: 150
+                    totalScore: 300
+                    gameComplete: false
+                wrong:
+                  summary: Wrong guess — 0 points
+                  value:
+                    roundNumber: 3
+                    titleCorrect: false
+                    artistCorrect: false
+                    correctTitle: Blinding Lights
+                    correctArtist: The Weeknd
+                    videoId: 4NRXx6U8ABQ
+                    pointsEarned: 0
+                    totalScore: 300
+                    gameComplete: false
+                last_round:
+                  summary: Last round answered
+                  value:
+                    roundNumber: 5
+                    titleCorrect: true
+                    artistCorrect: false
+                    correctTitle: Bohemian Rhapsody
+                    correctArtist: Queen
+                    videoId: fJ9rUzIMcZQ
+                    pointsEarned: 100
+                    totalScore: 550
+                    gameComplete: true
+        "400":
+          description: |
+            One of:
+            - Game is already complete (all rounds answered).
+            - `choiceIndex` out of range (0 to `choices.length - 1`).
+            - Wrong mode: body has no `choiceIndex` for a `multiple_choice`
+              session (default `-1` triggers this), or body has `choiceIndex ≥ 0`
+              for a `free_text` session. Sending both fields is allowed in
+              `multiple_choice` mode — `choiceIndex` takes precedence.
+            - Empty title: `title` is absent or blank in a `free_text` session.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                game_complete:
+                  value:
+                    error: "Game is already complete. Fetch /results."
+                bad_index:
+                  value:
+                    error: "choiceIndex 9 is out of range (valid: 0–3)."
+                wrong_mode_mc:
+                  value:
+                    error: 'Session is in multiple_choice mode. Send { "choiceIndex": N }.'
+                wrong_mode_ft:
+                  value:
+                    error: 'Session is in free_text mode. Send { "title": "...", "artist": "..." }.'
+                empty_title:
+                  value:
+                    error: "'title' is required in free_text mode."
+        "404":
+          description: Session not found or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Session not found"
+
+
+  /api/game/{sessionId}/results:
+    get:
+      tags: [game]
+      operationId: getResults
+      summary: Get the full game scoreboard
+      description: |
+        Returns the complete results for all answered rounds.
+
+        Available at any point during the game — not just after completion.
+        Useful for mid-game score displays or recovery after a page reload.
+
+        `rounds` contains only rounds that have been answered so far.
+        `maxPossibleScore` = `totalRounds × 150` (100 title + 50 artist).
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Game results returned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameResults"
+              example:
+                sessionId: "550e8400-e29b-41d4-a716-446655440000"
+                totalScore: 550
+                maxPossibleScore: 750
+                totalRounds: 5
+                rounds:
+                  - roundNumber: 1
+                    titleCorrect: true
+                    artistCorrect: true
+                    correctTitle: Shape of You
+                    correctArtist: Ed Sheeran
+                    videoId: JGwWNGJdvx8
+                    pointsEarned: 150
+                    totalScore: 150
+                  - roundNumber: 2
+                    titleCorrect: true
+                    artistCorrect: false
+                    correctTitle: Yellow
+                    correctArtist: Coldplay
+                    videoId: yKNxeF4KMsY
+                    pointsEarned: 100
+                    totalScore: 250
+        "404":
+          description: Session not found or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Session not found"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+components:
+
+  # ── Parameters ─────────────────────────────────────────────────────────────
+
+  parameters:
+
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      description: |
+        UUID returned by `POST /api/game/new`. Sessions expire after 1 hour
+        of inactivity; a 404 means the session has expired or never existed.
+      schema:
+        type: string
+        format: uuid
+        example: "550e8400-e29b-41d4-a716-446655440000"
+
+
+  # ── Schemas ─────────────────────────────────────────────────────────────────
+
+  schemas:
+
+    # ── Requests ───────────────────────────────────────────────────────────
+
+    NewGameRequest:
+      type: object
+      description: |
+        All fields are optional. Omit the body entirely to start with defaults.
+      properties:
+        rounds:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 5
+          description: Number of songs in this session.
+          example: 5
+        difficulty:
+          type: string
+          enum: [easy, normal, hard]
+          default: normal
+          description: |
+            Controls `clipDuration` and `roundTimeout` hints sent back to
+            the client. The backend does not enforce any timer.
+          example: normal
+        mode:
+          type: string
+          enum: [multiple_choice, free_text]
+          default: multiple_choice
+          description: |
+            Answer mode for the whole session. Cannot be changed mid-game.
+            - `multiple_choice` — client picks from 4 shuffled options.
+            - `free_text` — client types the title and artist.
+          example: multiple_choice
+
+    AnswerRequestMultipleChoice:
+      type: object
+      description: |
+        Body for `multiple_choice` sessions. `choiceIndex` is the 0-based
+        index of the option the player selected from the `choices` array
+        returned by `GET /round`.
+      required: [choiceIndex]
+      properties:
+        choiceIndex:
+          type: integer
+          minimum: 0
+          description: 0-based index into the `choices` array of the current round.
+          example: 2
+
+    AnswerRequestFreeText:
+      type: object
+      description: |
+        Body for `free_text` sessions. `title` is required; `artist` is
+        optional (omitting it earns 100 pts for title only, no artist bonus).
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          description: The player's guess for the song title.
+          example: Shape of You
+        artist:
+          type: string
+          description: The player's guess for the artist (optional bonus).
+          example: Ed Sheeran
+
+
+    # ── Responses ──────────────────────────────────────────────────────────
+
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          example: ok
+
+    GameSession:
+      type: object
+      description: Returned after successfully creating a new game session.
+      required:
+        - sessionId
+        - totalRounds
+        - difficulty
+        - mode
+        - clipDuration
+        - roundTimeout
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          description: |
+            Opaque session identifier. Pass it as `{sessionId}` in all
+            subsequent requests.
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        totalRounds:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: Number of rounds in this session.
+          example: 5
+        difficulty:
+          type: string
+          enum: [easy, normal, hard]
+          example: normal
+        mode:
+          type: string
+          enum: [multiple_choice, free_text]
+          description: Answer mode, fixed for the lifetime of this session.
+          example: multiple_choice
+        clipDuration:
+          type: integer
+          description: |
+            Hint: how many seconds of the video the client should play before
+            pausing and asking for a guess. The backend does not enforce this.
+          example: 8
+        roundTimeout:
+          type: integer
+          description: |
+            Hint: how many seconds the client should allow for the player to
+            answer before treating the round as a timeout. The backend does
+            not enforce this — submit an empty guess to register a timeout.
+          example: 10
+
+    RoundData:
+      type: object
+      description: |
+        Data for the current active round. `title` and `artist` are
+        intentionally absent to prevent spoilers before the player guesses.
+
+        **Always check `finished` first.** When `finished: false` the other
+        fields are guaranteed to be present. When `finished: true` (see
+        `GameFinished` schema) only `finished` and `totalRounds` are present —
+        destructuring `videoId`, `roundNumber`, etc. without this check will
+        throw a runtime error in the client.
+      required:
+        - finished
+        - roundNumber
+        - totalRounds
+        - videoId
+        - startTime
+        - duration
+        - mode
+      properties:
+        finished:
+          type: boolean
+          enum: [false]
+          description: |
+            Always `false` for an active round. Use this as the discriminator
+            between `RoundData` and `GameFinished` before accessing any other field.
+          example: false
+        roundNumber:
+          type: integer
+          minimum: 1
+          description: Current round index (1-based).
+          example: 2
+        totalRounds:
+          type: integer
+          description: Total rounds in this session.
+          example: 5
+        videoId:
+          type: string
+          description: |
+            YouTube video ID. Pass to the IFrame Player API:
+            `new YT.Player('player', { videoId: videoId })`.
+          example: JGwWNGJdvx8
+        startTime:
+          type: integer
+          minimum: 0
+          description: |
+            Second at which the client should start playback
+            (`playerVars.start` in the IFrame API). Chosen randomly between
+            30 s and (90 − `duration`) s to ensure the clip does not overrun
+            the end of a typical 3-minute song.
+          example: 42
+        duration:
+          type: integer
+          minimum: 3
+          maximum: 15
+          description: |
+            How many seconds of audio the client should play before pausing.
+            Equals the session's `clipDuration` (difficulty-driven: 15 easy,
+            8 normal, 3 hard). This field is the authoritative per-round value.
+          example: 8
+        thumbnail:
+          type: string
+          format: uri
+          nullable: true
+          description: |
+            YouTube default thumbnail URL. May be null if YouTube did not
+            return thumbnail data for this video.
+          example: "https://img.youtube.com/vi/JGwWNGJdvx8/default.jpg"
+        mode:
+          type: string
+          enum: [multiple_choice, free_text]
+          description: Reflects the session's answer mode.
+          example: multiple_choice
+        choices:
+          type: array
+          description: |
+            **Present only in `multiple_choice` mode.** Absent in `free_text`
+            mode. Contains exactly 4 items (or fewer if the library is very
+            small): one correct answer and three distractors, all shuffled.
+            The client must not assume any position is correct.
+          items:
+            $ref: "#/components/schemas/Choice"
+          minItems: 2
+          maxItems: 4
+
+    Choice:
+      type: object
+      description: |
+        One option in the multiple-choice list. Presented to the player as
+        a selectable answer. The correct option is included but in a random
+        position — the client cannot determine which is correct.
+      required: [title, artist]
+      properties:
+        title:
+          type: string
+          description: Song title.
+          example: Shape of You
+        artist:
+          type: string
+          description: Artist name.
+          example: Ed Sheeran
+
+    GameFinished:
+      type: object
+      description: |
+        Returned by `GET /round` when all rounds have already been answered.
+        The client should navigate to `GET /results`.
+      required: [finished, totalRounds]
+      properties:
+        finished:
+          type: boolean
+          enum: [true]
+          example: true
+        totalRounds:
+          type: integer
+          example: 5
+
+    AnswerResult:
+      type: object
+      description: |
+        Evaluation of the player's answer. Always reveals the correct title,
+        artist, and videoId so the client can show a reveal screen.
+      required:
+        - roundNumber
+        - titleCorrect
+        - artistCorrect
+        - correctTitle
+        - correctArtist
+        - videoId
+        - pointsEarned
+        - totalScore
+        - gameComplete
+      properties:
+        roundNumber:
+          type: integer
+          minimum: 1
+          description: The round that was just answered (1-based).
+          example: 2
+        titleCorrect:
+          type: boolean
+          description: Whether the player correctly identified the song title.
+          example: true
+        artistCorrect:
+          type: boolean
+          description: Whether the player correctly identified the artist.
+          example: true
+        correctTitle:
+          type: string
+          description: The actual song title (revealed after guessing).
+          example: Shape of You
+        correctArtist:
+          type: string
+          description: The actual artist name (revealed after guessing).
+          example: Ed Sheeran
+        videoId:
+          type: string
+          description: |
+            YouTube videoId for this round. Useful for a reveal screen where
+            the client plays the full song after the round.
+          example: JGwWNGJdvx8
+        pointsEarned:
+          type: integer
+          minimum: 0
+          description: |
+            Points awarded for this round.
+            - `multiple_choice`: 150 if correct, 0 if wrong.
+            - `free_text`: 100 for correct title + 50 bonus for correct artist.
+          example: 150
+        totalScore:
+          type: integer
+          minimum: 0
+          description: Cumulative score up to and including this round.
+          example: 300
+        gameComplete:
+          type: boolean
+          description: |
+            `true` if this was the last round. The client should fetch
+            `GET /results` and show the final scoreboard.
+          example: false
+
+    RoundResult:
+      type: object
+      description: Per-round breakdown item inside `GameResults.rounds`.
+      required:
+        - roundNumber
+        - titleCorrect
+        - artistCorrect
+        - correctTitle
+        - correctArtist
+        - videoId
+        - pointsEarned
+        - totalScore
+      properties:
+        roundNumber:
+          type: integer
+          minimum: 1
+          example: 1
+        titleCorrect:
+          type: boolean
+          example: true
+        artistCorrect:
+          type: boolean
+          example: true
+        correctTitle:
+          type: string
+          example: Shape of You
+        correctArtist:
+          type: string
+          example: Ed Sheeran
+        videoId:
+          type: string
+          description: YouTube videoId — allows the client to replay each song on the results screen.
+          example: JGwWNGJdvx8
+        pointsEarned:
+          type: integer
+          minimum: 0
+          example: 150
+        totalScore:
+          type: integer
+          minimum: 0
+          description: Cumulative score at the end of this round.
+          example: 150
+
+    GameResults:
+      type: object
+      description: Full game scoreboard. `rounds` covers only answered rounds.
+      required:
+        - sessionId
+        - totalScore
+        - maxPossibleScore
+        - totalRounds
+        - rounds
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        totalScore:
+          type: integer
+          minimum: 0
+          description: Sum of points earned across all answered rounds.
+          example: 550
+        maxPossibleScore:
+          type: integer
+          description: |
+            Maximum achievable score = `totalRounds × 150`. Use this to
+            calculate a percentage: `(totalScore / maxPossibleScore) × 100`.
+          example: 750
+        totalRounds:
+          type: integer
+          description: Total rounds in the session (not just answered ones).
+          example: 5
+        rounds:
+          type: array
+          description: One entry per answered round, in order.
+          items:
+            $ref: "#/components/schemas/RoundResult"
+
+    ErrorResponse:
+      type: object
+      description: |
+        Standard error envelope returned on all 4xx and 5xx responses.
+
+        The `error` field is a human-readable message. It is suitable for
+        display in development/debug UIs but **should not be parsed
+        programmatically** — use the HTTP status code for branching logic.
+
+        Future enhancement: the `error` field may be joined by a machine-
+        readable `code` string (e.g. `"QUOTA_EXCEEDED"`, `"SESSION_EXPIRED"`)
+        and an optional `details` object. Design for this by always reading
+        `error` by key, never by position.
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message.
+          example: "Session not found"

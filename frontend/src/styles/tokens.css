@@ -1,0 +1,103 @@
+/*
+ * Design tokens — single source of truth for the entire UI.
+ *
+ * Rule of thumb:
+ *   "Quiet" UI (progress bar, labels, background surfaces) → use --clr-surface* + --clr-text-secondary
+ *   "Energic" UI (choices, feedback, countdown, CTA buttons) → use --clr-primary + correct/wrong colors
+ */
+
+:root {
+  /* ── Color palette ──────────────────────────────────────────────────────── */
+
+  /* Backgrounds — deep space feel, audio-focused */
+  --clr-bg:              #08080f;
+  --clr-surface:         #10101e;
+  --clr-surface-raised:  #16162a;
+  --clr-surface-hover:   #1c1c32;
+  --clr-border:          #22223a;
+  --clr-border-subtle:   #1a1a2e;
+
+  /* Primary — electric violet (energy without harshness) */
+  --clr-primary:         #6c5ce7;
+  --clr-primary-light:   #8b7df0;
+  --clr-primary-hover:   #5a4bd6;
+  --clr-primary-glow:    rgba(108, 92, 231, 0.30);
+  --clr-primary-glow-sm: rgba(108, 92, 231, 0.15);
+
+  /* Semantic feedback */
+  --clr-correct:         #00d97e;
+  --clr-correct-bg:      rgba(0, 217, 126, 0.08);
+  --clr-correct-border:  rgba(0, 217, 126, 0.40);
+  --clr-correct-glow:    rgba(0, 217, 126, 0.25);
+
+  --clr-wrong:           #ff4757;
+  --clr-wrong-bg:        rgba(255, 71, 87, 0.08);
+  --clr-wrong-border:    rgba(255, 71, 87, 0.40);
+  --clr-wrong-glow:      rgba(255, 71, 87, 0.20);
+
+  --clr-partial:         #ffd32a;
+  --clr-partial-bg:      rgba(255, 211, 42, 0.08);
+  --clr-partial-border:  rgba(255, 211, 42, 0.40);
+
+  /* Typography */
+  --clr-text:            #eeeef8;
+  --clr-text-secondary:  #8888aa;
+  --clr-text-muted:      #44445a;
+  --clr-text-inverse:    #0a0a14;
+
+  /* ── Typography ──────────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --text-xs:   0.75rem;   /* 12px */
+  --text-sm:   0.875rem;  /* 14px */
+  --text-base: 1rem;      /* 16px */
+  --text-lg:   1.125rem;  /* 18px */
+  --text-xl:   1.25rem;   /* 20px */
+  --text-2xl:  1.5rem;    /* 24px */
+  --text-3xl:  1.875rem;  /* 30px */
+  --text-4xl:  2.25rem;   /* 36px */
+
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+  --weight-black:    900;
+
+  /* ── Spacing ─────────────────────────────────────────────────────────────── */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* ── Border radius ───────────────────────────────────────────────────────── */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-full: 9999px;
+
+  /* ── Transitions ─────────────────────────────────────────────────────────── */
+  /* Fast: hover, focus  |  Normal: state changes  |  Slow: banners, overlays */
+  --trans-fast:   100ms cubic-bezier(0.4, 0, 0.2, 1);
+  --trans-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --trans-slow:   340ms cubic-bezier(0.4, 0, 0.2, 1);
+  --trans-spring: 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Shadows ─────────────────────────────────────────────────────────────── */
+  --shadow-sm:           0 1px 4px rgba(0, 0, 0, 0.4);
+  --shadow-md:           0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg:           0 8px 32px rgba(0, 0, 0, 0.7);
+  --shadow-primary:      0 0 24px var(--clr-primary-glow);
+  --shadow-correct:      0 0 24px var(--clr-correct-glow);
+  --shadow-wrong:        0 0 20px var(--clr-wrong-glow);
+
+  /* ── Layout ─────────────────────────────────────────────────────────────── */
+  --max-width: 520px;
+  --page-px:   1rem;
+}

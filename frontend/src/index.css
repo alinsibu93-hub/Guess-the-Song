@@ -1,0 +1,6 @@
+/* Entry point — imports ordered: tokens → animations → base → components */
+@import './styles/tokens.css';
+@import './styles/animations.css';
+@import './styles/base.css';
+
+/* Component styles are imported directly in their .jsx files */

@@ -1,0 +1,28 @@
+[build]
+  base    = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+# SPA fallback — all paths that don't match a real file get index.html.
+# Without this, a hard refresh on any route returns Netlify's 404 page.
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# Security headers applied to every response.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options        = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "strict-origin-when-cross-origin"
+    # Allow YouTube IFrame API to load and autoplay via postMessage.
+    # 'unsafe-inline' on script-src is required by the YouTube IFrame bootstrap.
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com; frame-src https://www.youtube.com; connect-src 'self' VITE_API_PLACEHOLDER; img-src 'self' data: https://i.ytimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com"
+
+# Static assets — aggressive caching (fingerprinted by Vite).
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

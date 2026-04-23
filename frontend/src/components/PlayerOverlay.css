@@ -1,0 +1,159 @@
+/*
+ * PlayerOverlay.css
+ *
+ * Design intent: this zone should feel like a "listening room" —
+ * dark, focused, minimal. The audio is the star; everything here
+ * should fade into the background until the countdown needs attention.
+ *
+ * Anti-spoiler: the YouTube iframe is NEVER visible (off-screen at left:-9999px).
+ * This overlay is 100% custom visual — no YouTube UI ever leaks through.
+ */
+
+.player-overlay {
+  position: relative;
+  background: var(--clr-surface);
+  /* Subtle inner glow to suggest "something is playing" */
+  border: 1.5px solid var(--clr-border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8) var(--space-6);
+  margin-bottom: var(--space-6);
+  min-height: 160px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* Depth layer — the player area is visually "behind" the UI */
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.04);
+
+  overflow: hidden;
+}
+
+/* Ambient radial gradient — appears during PLAYING state */
+.player-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(ellipse 70% 60% at 50% 50%,
+    rgba(108, 92, 231, 0.06) 0%,
+    transparent 100%);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  pointer-events: none;
+}
+
+.player-overlay--active::before {
+  opacity: 1;
+}
+
+/* ── Visual container ─────────────────────────────────────────────────────── */
+.player-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  animation: fadeSlideUp 0.3s var(--trans-normal);
+}
+
+/* ── Loading / init status ───────────────────────────────────────────────── */
+.player-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--clr-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* ── Waveform ────────────────────────────────────────────────────────────── */
+/*
+ * 5 bars that animate at different speeds/delays.
+ * scaleY(1) = full height; transform-origin bottom so bars grow upward.
+ * The organic feel comes from each bar being slightly out of phase.
+ */
+.player-wave {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 52px;
+}
+
+.wave-bar {
+  width: 5px;
+  height: 100%;
+  background: var(--clr-primary);
+  border-radius: 3px;
+  transform-origin: bottom center;
+  animation: waveBar 1.1s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+/* Each bar: different duration + delay = organic, non-mechanical feel */
+.wave-bar:nth-child(1) { animation-duration: 0.95s; animation-delay: 0.00s; }
+.wave-bar:nth-child(2) { animation-duration: 1.20s; animation-delay: 0.18s; background: var(--clr-primary-light); }
+.wave-bar:nth-child(3) { animation-duration: 0.85s; animation-delay: 0.35s; }
+.wave-bar:nth-child(4) { animation-duration: 1.10s; animation-delay: 0.12s; background: var(--clr-primary-light); }
+.wave-bar:nth-child(5) { animation-duration: 1.00s; animation-delay: 0.28s; }
+
+/* ── Listening label ─────────────────────────────────────────────────────── */
+.player-label {
+  font-size: var(--text-sm);
+  color: var(--clr-text-secondary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+}
+
+/* ── Countdown ────────────────────────────────────────────────────────────── */
+/*
+ * Large, pulse-animated number. Beats once per second (animation-duration:1s)
+ * so the player unconsciously tracks the remaining time.
+ * At ≤3s, the .countdown--urgent modifier kicks in: faster + warm color.
+ */
+.countdown {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  animation: countdownBeat 1s ease-in-out infinite;
+}
+
+.countdown--urgent {
+  animation: countdownUrgent 0.5s ease-in-out infinite;
+}
+
+.countdown-number {
+  font-size: 3.2rem;
+  font-weight: var(--weight-black);
+  line-height: 1;
+  color: var(--clr-primary);
+  font-variant-numeric: tabular-nums;
+  /* Prevent layout shift as digit count changes (1 ↔ 2 digits) */
+  min-width: 2ch;
+  text-align: center;
+  transition: color var(--trans-normal);
+}
+
+.countdown--urgent .countdown-number {
+  color: #ff8a5c; /* warm orange — urgency without panic */
+}
+
+.countdown-unit {
+  font-size: var(--text-sm);
+  color: var(--clr-text-muted);
+  font-weight: var(--weight-medium);
+}
+
+/* ── Idle state ──────────────────────────────────────────────────────────── */
+.player-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.player-idle-icon {
+  font-size: 2.4rem;
+  opacity: 0.2;
+  animation: skeletonPulse 2.5s ease-in-out infinite;
+}

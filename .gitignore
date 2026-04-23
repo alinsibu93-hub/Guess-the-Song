@@ -47,3 +47,11 @@ desktop.ini
 gts_preview_*.mp3
 gts_preview_*.ogg
 gts_mock_*.wav
+
+# ── Claude Code internal files ─────────────────────────────────────────────
+.claude/
+
+# ── Node / frontend ────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/node_modules/

@@ -1,0 +1,138 @@
+/* ── Feedback Banner ──────────────────────────────────────────────────────── */
+/*
+ * Entrance: popIn (spring scale + fade) — feels like a reveal, not an update.
+ * Three variants: correct (green), wrong (red), partial (yellow).
+ * The variant modifier drives border color, background tint, and glow.
+ */
+.feedback-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  border: 1.5px solid transparent;
+  text-align: center;
+  animation: popIn 0.3s var(--trans-spring);
+}
+
+/* ── Correct variant ──────────────────────────────────────────────────────── */
+.feedback-banner--correct {
+  background: var(--clr-correct-bg);
+  border-color: var(--clr-correct-border);
+  box-shadow: var(--shadow-correct), inset 0 1px 0 rgba(0, 217, 126, 0.05);
+  animation: popIn 0.3s var(--trans-spring), correctRing 0.6s ease-out 0.1s;
+}
+
+/* ── Wrong variant ────────────────────────────────────────────────────────── */
+.feedback-banner--wrong {
+  background: var(--clr-wrong-bg);
+  border-color: var(--clr-wrong-border);
+  box-shadow: var(--shadow-wrong);
+  animation: popIn 0.3s var(--trans-spring), wrongShiver 0.4s ease-out 0.1s;
+}
+
+/* ── Partial variant ──────────────────────────────────────────────────────── */
+.feedback-banner--partial {
+  background: var(--clr-partial-bg);
+  border-color: var(--clr-partial-border);
+  box-shadow: 0 0 20px rgba(255, 211, 42, 0.12);
+  animation: popIn 0.3s var(--trans-spring), partialBob 0.5s ease-out 0.1s;
+}
+
+/* ── Icon ─────────────────────────────────────────────────────────────────── */
+.feedback-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+/* ── Answer reveal ────────────────────────────────────────────────────────── */
+.feedback-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.feedback-title {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--clr-text);
+  line-height: 1.2;
+}
+
+.feedback-artist {
+  font-size: var(--text-sm);
+  color: var(--clr-text-secondary);
+}
+
+/* ── Per-field breakdown ──────────────────────────────────────────────────── */
+.feedback-fields {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.feedback-field {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+}
+
+.feedback-field--ok {
+  background: var(--clr-correct-bg);
+  color: var(--clr-correct);
+  border: 1px solid var(--clr-correct-border);
+}
+
+.feedback-field--miss {
+  background: var(--clr-wrong-bg);
+  color: var(--clr-wrong);
+  border: 1px solid var(--clr-wrong-border);
+}
+
+/* ── Points ───────────────────────────────────────────────────────────────── */
+.feedback-points {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.points-earned {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-black);
+  color: var(--clr-primary-light);
+  font-variant-numeric: tabular-nums;
+  animation: scoreFloat 1.2s ease-out 0.4s both;
+}
+
+.points-total {
+  font-size: var(--text-sm);
+  color: var(--clr-text-secondary);
+}
+
+/* ── Next button with countdown ───────────────────────────────────────────── */
+.next-btn {
+  width: 100%;
+  padding: var(--space-3) var(--space-6);
+  background: var(--clr-surface-raised);
+  border: 1.5px solid var(--clr-border);
+  color: var(--clr-text);
+  font-weight: var(--weight-medium);
+  border-radius: var(--radius-md);
+  transition:
+    background var(--trans-fast),
+    border-color var(--trans-fast),
+    transform var(--trans-fast);
+}
+
+.next-btn:hover {
+  background: var(--clr-surface-hover);
+  border-color: var(--clr-primary);
+  transform: translateY(-1px);
+}
+
+.next-btn:active {
+  transform: translateY(0);
+  animation: clickBounce 0.15s var(--trans-fast);
+}

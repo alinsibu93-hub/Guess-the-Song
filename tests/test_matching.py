@@ -8,7 +8,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from game_engine import _title_matches, _artist_matches, _normalize
+from game import _title_matches, _artist_matches, _normalize
 
 
 class TestNormalize:

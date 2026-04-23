@@ -1,0 +1,74 @@
+/* ── Free Text Form ───────────────────────────────────────────────────────── */
+.free-text-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: fadeSlideUp 0.25s var(--trans-normal);
+}
+
+/* ── Field wrapper (used for both text inputs) ────────────────────────────── */
+.free-text-form .field {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Bonus hint inside artist label ──────────────────────────────────────── */
+.bonus-hint {
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--clr-primary-light);
+  font-weight: var(--weight-medium);
+  opacity: 0.8;
+}
+
+/* ── Hard mode hint text ──────────────────────────────────────────────────── */
+.hard-hint {
+  font-size: var(--text-sm);
+  color: var(--clr-text-secondary);
+  background: rgba(255, 211, 42, 0.07);
+  border: 1px solid var(--clr-partial-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* ── Title input ready state — glows when user has typed something ────────── */
+/*
+ * Applied via .free-text-form--ready on the form element.
+ * The border animation cues the user that Enter / Submit is now active.
+ */
+.free-text-form--ready #ft-title {
+  border-color: var(--clr-primary);
+  animation: borderGlow 1.8s ease-in-out infinite;
+}
+
+/* ── Submit button ────────────────────────────────────────────────────────── */
+.submit-btn {
+  padding: var(--space-3) var(--space-6);
+  background: var(--clr-primary);
+  color: var(--clr-text-inverse);
+  font-weight: var(--weight-bold);
+  border-radius: var(--radius-md);
+  border: none;
+  transition:
+    background var(--trans-fast),
+    box-shadow var(--trans-fast),
+    transform var(--trans-fast);
+  align-self: stretch;
+}
+
+.submit-btn:not(:disabled):hover {
+  background: var(--clr-primary-hover);
+  box-shadow: var(--shadow-primary);
+  transform: translateY(-1px);
+}
+
+.submit-btn:not(:disabled):active {
+  transform: translateY(0);
+  animation: clickBounce 0.15s var(--trans-fast);
+}
+
+.submit-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+}
