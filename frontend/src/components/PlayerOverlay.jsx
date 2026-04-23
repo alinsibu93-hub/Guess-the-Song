@@ -6,48 +6,27 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
   const containerRef = useRef(null);
   const { isReady, play, stop } = useYouTubePlayer(containerRef);
 
-  // hasStarted: user tapped "▶ Ascultă" — guarantees a direct gesture for Chrome audio
   const [hasStarted, setHasStarted] = useState(false);
-  // isPlaying: YouTube confirmed PLAYING — countdown starts from here, not from tap
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying,  setIsPlaying]  = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(null);
 
-  // Reset everything when a new round's video arrives.
+  // Reset state when a new round's video arrives.
   useEffect(() => {
     setHasStarted(false);
     setIsPlaying(false);
     setSecondsLeft(null);
-  }, [videoId]);
+    stop();
+  }, [videoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Start playback only after user taps (hasStarted) and player is ready.
+  // Stop playback if the parent deactivates us mid-clip.
   useEffect(() => {
-    if (!active || !isReady || !videoId || !hasStarted) return;
+    if (!active) stop();
+  }, [active]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    play(
-      videoId,
-      startTime,
-      duration,
-      // onEnded — called by hook when clip duration expires
-      () => {
-        setIsPlaying(false);
-        onEnded?.();
-      },
-      // onPlaybackStarted — called by hook on first PLAYING event (after buffering)
-      // Countdown starts HERE, in sync with actual audio, not at tap time.
-      () => {
-        setIsPlaying(true);
-        setSecondsLeft(duration);
-      },
-    );
+  // Unmount cleanup.
+  useEffect(() => () => stop(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return () => {
-      stop();
-      setIsPlaying(false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, isReady, videoId, startTime, duration, hasStarted]);
-
-  // Visible countdown — ticks only while audio is confirmed playing.
+  // Visible countdown ticker — only while audio is confirmed playing.
   useEffect(() => {
     if (!isPlaying) return;
     const tick = setInterval(() => {
@@ -59,24 +38,45 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
     return () => clearInterval(tick);
   }, [isPlaying]);
 
-  const handleTapPlay = useCallback(() => setHasStarted(true), []);
+  // ── Tap handler ────────────────────────────────────────────────────────
+  // IMPORTANT: play() is called DIRECTLY here, synchronously inside the
+  // click event handler. If we called it via setState → useEffect, the
+  // ~100 ms React scheduling delay would expire Chrome's user-gesture
+  // window and block audio entirely. Direct call = gesture window intact.
+  const handleTapPlay = useCallback(() => {
+    if (!isReady || !videoId || !active || hasStarted) return;
+    setHasStarted(true);
+
+    play(
+      videoId,
+      startTime,
+      duration,
+      // onEnded — clip window expired
+      () => {
+        setIsPlaying(false);
+        onEnded?.();
+      },
+      // onPlaybackStarted — YouTube confirmed PLAYING; start visual countdown
+      () => {
+        setIsPlaying(true);
+        setSecondsLeft(duration);
+      },
+    );
+  }, [isReady, videoId, startTime, duration, active, hasStarted, play, onEnded]);
 
   return (
     <div className={`player-overlay${active ? ' player-overlay--active' : ''}`}>
       {/*
-        * Iframe must stay within the visible viewport — Chrome blocks autoplay
-        * for elements positioned outside it (left:-9999px counts as "invisible").
-        * opacity:0 + pointer-events:none keeps it invisible to the user while
-        * remaining "in viewport" for Chrome's autoplay policy check.
-        */}
+       * Iframe positioned at top:0 left:0 with opacity:0 — keeps it inside
+       * Chrome's "visible viewport" check (required for autoplay to work)
+       * while remaining invisible to the user. left:-9999px was blocking audio.
+       */}
       <div
         ref={containerRef}
         style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '1px',
-          height: '1px',
+          top: 0, left: 0,
+          width: '1px', height: '1px',
           overflow: 'hidden',
           opacity: 0,
           pointerEvents: 'none',
@@ -88,27 +88,27 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
       <div className="player-visual">
         {!isReady && (
           <div className="player-status">
-            <span className="spinner-sm" />
+            <span className="spinner--sm" />
             <span>Se inițializează playerul...</span>
           </div>
         )}
 
-        {/* Step 1: player ready, waiting for user tap */}
+        {/* Waiting for tap */}
         {isReady && active && !hasStarted && (
           <button className="tap-play-btn" onClick={handleTapPlay} aria-label="Pornește clipul audio">
             ▶ Ascultă
           </button>
         )}
 
-        {/* Step 2: user tapped, video is buffering */}
+        {/* Tapped — buffering */}
         {isReady && active && hasStarted && !isPlaying && (
           <div className="player-status">
-            <span className="spinner-sm" />
+            <span className="spinner--sm" />
             <span>Se încarcă...</span>
           </div>
         )}
 
-        {/* Step 3: audio confirmed playing — show waveform + countdown */}
+        {/* Audio confirmed playing */}
         {isReady && active && isPlaying && (
           <>
             <div className="player-wave" aria-label="Se redă audio">
