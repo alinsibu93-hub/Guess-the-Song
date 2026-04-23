@@ -9,3 +9,6 @@ flask-cors>=4.0.0
 
 # .env file support (credentials can also be exported as env vars)
 python-dotenv>=1.0.0
+
+# Production WSGI server (required for Render / cloud deploy)
+gunicorn>=21.2.0
