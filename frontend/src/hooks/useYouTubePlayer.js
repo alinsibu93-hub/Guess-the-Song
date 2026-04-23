@@ -72,8 +72,20 @@ export function useYouTubePlayer(containerRef) {
           origin: window.location.origin,
         },
         events: {
-          onReady: () => {
+          onReady: (e) => {
+            // Unmute immediately on creation — Chrome may create players muted
+            // on sites with low Media Engagement Index (new/rarely visited sites).
+            e.target.unMute();
+            e.target.setVolume(100);
             if (!destroyed) setIsReady(true);
+          },
+          onStateChange: (e) => {
+            // Re-assert volume when playback actually starts (state 1 = PLAYING).
+            // Belt-and-suspenders: Chrome occasionally re-mutes on loadVideoById.
+            if (e.data === window.YT.PlayerState.PLAYING) {
+              e.target.unMute();
+              e.target.setVolume(100);
+            }
           },
           onError: (e) => {
             // Common codes: 2=bad videoId, 100=not found, 150=not embeddable.
@@ -106,6 +118,8 @@ export function useYouTubePlayer(containerRef) {
     // Cancel any running stop timer from a previous clip.
     clearTimeout(stopTimerRef.current);
 
+    playerRef.current.unMute();
+    playerRef.current.setVolume(100);
     playerRef.current.loadVideoById({
       videoId,
       startSeconds: startTime,
