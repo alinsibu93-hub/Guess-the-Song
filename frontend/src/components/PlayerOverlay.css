@@ -182,6 +182,25 @@
   animation: skeletonPulse 2.5s ease-in-out infinite;
 }
 
+/* ── Error state ──────────────────────────────────────────────────────────── */
+.player-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  animation: fadeSlideUp 0.2s var(--trans-normal);
+}
+
+.player-error-icon {
+  font-size: 1.8rem;
+}
+
+.player-error span:last-child {
+  font-size: var(--text-sm);
+  color: var(--clr-text-muted);
+  text-align: center;
+}
+
 /* ── Tap-to-play button ───────────────────────────────────────────────────── */
 /*
  * Chrome blocks autoplay with audio on sites the user hasn't visited before.

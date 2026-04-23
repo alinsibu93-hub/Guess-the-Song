@@ -8,12 +8,14 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
 
   const [hasStarted,  setHasStarted]  = useState(false);
   const [isPlaying,   setIsPlaying]   = useState(false);
+  const [hasError,    setHasError]    = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(null);
 
   // Reset when a new round's video arrives.
   useEffect(() => {
     setHasStarted(false);
     setIsPlaying(false);
+    setHasError(false);
     setSecondsLeft(null);
     stop();
   }, [videoId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -46,6 +48,7 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
       videoId, startTime, duration,
       () => { setIsPlaying(false); onEnded?.(); },
       () => { setIsPlaying(true); setSecondsLeft(duration); },
+      () => { setHasError(true); },
     );
   }, [isReady, videoId, startTime, duration, active, hasStarted, play, onEnded]);
 
@@ -79,10 +82,17 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
           </button>
         )}
 
-        {isReady && active && hasStarted && !isPlaying && (
+        {isReady && active && hasStarted && !isPlaying && !hasError && (
           <div className="player-status">
             <span className="spinner--sm" />
             <span>Se încarcă...</span>
+          </div>
+        )}
+
+        {isReady && active && hasError && (
+          <div className="player-error">
+            <span className="player-error-icon">⚠️</span>
+            <span>Piesa nu este disponibilă. Se avansează...</span>
           </div>
         )}
 

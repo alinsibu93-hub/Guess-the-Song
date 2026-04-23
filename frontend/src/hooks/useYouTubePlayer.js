@@ -90,14 +90,16 @@ export function useYouTubePlayer(containerRef) {
             }, duration * 1000);
           },
 
-          onError: () => {
+          onError: (e) => {
+            console.warn('[YouTube] error code:', e.data);
             if (!clipRef.current) return;
-            const { onEnded, onPlaybackStarted, consumed } = clipRef.current;
+            const { onEnded, onPlayError } = clipRef.current;
             clipRef.current = null;
             clearTimeout(stopTimerRef.current);
             clearTimeout(fallbackRef.current);
-            if (!consumed) onPlaybackStarted?.();
-            onEnded?.();
+            // Notify PlayerOverlay to show error message, then advance after 2 s.
+            onPlayError?.();
+            stopTimerRef.current = setTimeout(() => onEnded?.(), 2000);
           },
         },
       });
@@ -113,12 +115,12 @@ export function useYouTubePlayer(containerRef) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const play = useCallback((videoId, startTime, duration, onEnded, onPlaybackStarted) => {
+  const play = useCallback((videoId, startTime, duration, onEnded, onPlaybackStarted, onPlayError) => {
     if (!playerRef.current) return;
 
     clearTimeout(stopTimerRef.current);
     clearTimeout(fallbackRef.current);
-    clipRef.current = { duration, onEnded, onPlaybackStarted, consumed: false };
+    clipRef.current = { duration, onEnded, onPlaybackStarted, onPlayError, consumed: false };
 
     // Load muted — Chrome allows muted autoplay unconditionally.
     // onStateChange(PLAYING) will unmute once playback is confirmed.
