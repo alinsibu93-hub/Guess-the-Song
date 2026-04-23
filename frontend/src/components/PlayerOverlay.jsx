@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useYouTubePlayer } from '../hooks/useYouTubePlayer';
 import './PlayerOverlay.css';
 
@@ -20,10 +20,18 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
   const containerRef = useRef(null);
   const { isReady, play, stop } = useYouTubePlayer(containerRef);
   const [secondsLeft, setSecondsLeft] = useState(null);
+  // hasStarted: user has tapped the play button — guarantees a direct gesture
+  // before loadVideoById, which Chrome requires for audio on new sites.
+  const [hasStarted, setHasStarted] = useState(false);
+
+  // Reset tap state when a new round loads.
+  useEffect(() => {
+    setHasStarted(false);
+    setSecondsLeft(null);
+  }, [videoId]);
 
   useEffect(() => {
-    // Only trigger when we have everything needed and active flips to true.
-    if (!active || !isReady || !videoId) return;
+    if (!active || !isReady || !videoId || !hasStarted) return;
 
     setSecondsLeft(duration);
 
@@ -32,7 +40,6 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
       onEnded?.();
     });
 
-    // Visible countdown ticker — independent of the actual audio timer.
     const tick = setInterval(() => {
       setSecondsLeft((s) => {
         if (s === null || s <= 1) { clearInterval(tick); return 0; }
@@ -42,29 +49,23 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
 
     return () => {
       clearInterval(tick);
-      // Stop audio if this effect is cleaned up before the clip ends
-      // (e.g. component unmount or videoId change mid-play).
       stop();
     };
-    // Re-run only when a new clip should start.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, isReady, videoId, startTime, duration]);
+  }, [active, isReady, videoId, startTime, duration, hasStarted]);
+
+  const handleTapPlay = useCallback(() => {
+    setHasStarted(true);
+  }, []);
 
   return (
     <div className={`player-overlay${active ? ' player-overlay--active' : ''}`}>
-      {/* ── Hidden YouTube iframe ─────────────────────────────────────────
-          Off-screen so no title, thumbnail, or branding is ever visible.
-          aria-hidden removes it from the accessibility tree.
-      */}
       <div
         ref={containerRef}
         style={{ position: 'absolute', left: '-9999px', width: 1, height: 1 }}
         aria-hidden="true"
       />
 
-      {/* ── Custom visual UI ──────────────────────────────────────────────
-          Replaces the YouTube player entirely in the visible layout.
-      */}
       <div className="player-visual">
         {!isReady && (
           <div className="player-status">
@@ -73,16 +74,26 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
           </div>
         )}
 
-        {isReady && active && (
+        {/* Tap-to-play button — direct user gesture required by Chrome for audio */}
+        {isReady && active && !hasStarted && (
+          <button className="tap-play-btn" onClick={handleTapPlay} aria-label="Pornește clipul audio">
+            ▶ Ascultă
+          </button>
+        )}
+
+        {isReady && active && hasStarted && (
           <>
             <div className="player-wave" aria-label="Se redă audio">
-              {/* Simple animated bars — replace with a real waveform if desired */}
               {[...Array(5)].map((_, i) => (
-                <span key={i} className="wave-bar" style={{ animationDelay: `${i * 0.1}s` }} />
+                <span key={i} className="wave-bar" />
               ))}
             </div>
             <p className="player-label">Ascultă cu atenție...</p>
-            <div className={`countdown${secondsLeft !== null && secondsLeft <= 3 ? ' countdown--urgent' : ''}`} aria-live="polite" aria-label={`${secondsLeft} secunde rămase`}>
+            <div
+              className={`countdown${secondsLeft !== null && secondsLeft <= 3 ? ' countdown--urgent' : ''}`}
+              aria-live="polite"
+              aria-label={`${secondsLeft} secunde rămase`}
+            >
               <span className="countdown-number">{secondsLeft ?? duration}</span>
               <span className="countdown-unit">s</span>
             </div>

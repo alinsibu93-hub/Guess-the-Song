@@ -157,3 +157,36 @@
   opacity: 0.2;
   animation: skeletonPulse 2.5s ease-in-out infinite;
 }
+
+/* ── Tap-to-play button ───────────────────────────────────────────────────── */
+/*
+ * Chrome blocks autoplay with audio on sites the user hasn't visited before.
+ * This button gives us a direct user gesture right before loadVideoById,
+ * which is the only reliable way to unlock audio in all Chromium browsers.
+ */
+.tap-play-btn {
+  padding: var(--space-4) var(--space-8);
+  background: var(--clr-primary);
+  color: var(--clr-text-inverse);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  border-radius: var(--radius-full);
+  border: none;
+  cursor: pointer;
+  transition:
+    background var(--trans-fast),
+    box-shadow var(--trans-fast),
+    transform var(--trans-fast);
+  animation: popIn 0.3s var(--trans-spring);
+  box-shadow: var(--shadow-primary);
+}
+
+.tap-play-btn:hover {
+  background: var(--clr-primary-hover);
+  transform: scale(1.05);
+  box-shadow: var(--shadow-primary), var(--shadow-md);
+}
+
+.tap-play-btn:active {
+  transform: scale(0.97);
+}
