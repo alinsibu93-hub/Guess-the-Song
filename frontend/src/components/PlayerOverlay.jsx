@@ -4,12 +4,13 @@ import './PlayerOverlay.css';
 
 export default function PlayerOverlay({ videoId, startTime, duration, active, onEnded }) {
   const containerRef = useRef(null);
-  const { isReady, cue, play, stop } = useYouTubePlayer(containerRef);
+  const { isReady, cue, play, stop, requestUnmute, isMuted } = useYouTubePlayer(containerRef);
 
   const [hasStarted,  setHasStarted]  = useState(false);
   const [isPlaying,   setIsPlaying]   = useState(false);
   const [hasError,    setHasError]    = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(null);
+  const [needsUnmute, setNeedsUnmute] = useState(false);
 
   // Reset when a new round's video arrives.
   useEffect(() => {
@@ -17,6 +18,7 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
     setIsPlaying(false);
     setHasError(false);
     setSecondsLeft(null);
+    setNeedsUnmute(false);
     stop();
   }, [videoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -43,6 +45,22 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
     }, 1000);
     return () => clearInterval(tick);
   }, [isPlaying]);
+
+  // Pillar 4 — after 2 s of playback, check if still muted. If yes, the
+  // sticky-activation unmute in onStateChange didn't land (rare edge case
+  // on new/low-MEI origins). Show a fresh-gesture unmute button.
+  useEffect(() => {
+    if (!isPlaying) return;
+    const t = setTimeout(() => {
+      if (isMuted()) setNeedsUnmute(true);
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [isPlaying, isMuted]);
+
+  const handleUnmuteClick = useCallback(() => {
+    requestUnmute();
+    setNeedsUnmute(false);
+  }, [requestUnmute]);
 
   // ── CRITICAL: play() called synchronously inside onClick ─────────────────
   // Do NOT call play() via setState → useEffect. React scheduling (~100 ms)
@@ -118,6 +136,15 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
               <span className="countdown-number">{secondsLeft ?? duration}</span>
               <span className="countdown-unit">s</span>
             </div>
+            {needsUnmute && (
+              <button
+                className="unmute-btn"
+                onClick={handleUnmuteClick}
+                aria-label="Activează sunetul"
+              >
+                🔊 Activează sunetul
+              </button>
+            )}
           </>
         )}
 

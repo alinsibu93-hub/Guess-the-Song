@@ -233,3 +233,36 @@
 .tap-play-btn:active {
   transform: scale(0.97);
 }
+
+/* ── Unmute fallback button ──────────────────────────────────────────────── */
+/*
+ * Shown only when playback has been running for 2+ seconds but the player
+ * is still muted (sticky-activation unmute didn't land). Clicking it gives
+ * us a fresh user gesture to force unmute — last-ditch recovery.
+ */
+.unmute-btn {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  background: transparent;
+  color: var(--clr-primary-light);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  border: 1.5px solid var(--clr-primary);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition:
+    background var(--trans-fast),
+    color var(--trans-fast),
+    transform var(--trans-fast);
+  animation: fadeSlideUp 0.3s var(--trans-normal);
+}
+
+.unmute-btn:hover {
+  background: var(--clr-primary);
+  color: var(--clr-text-inverse);
+  transform: scale(1.04);
+}
+
+.unmute-btn:active {
+  transform: scale(0.97);
+}

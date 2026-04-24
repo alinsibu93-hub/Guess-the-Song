@@ -18,15 +18,28 @@ function loadYouTubeIframeApi() {
 
 // ── Hook ──────────────────────────────────────────────────────────────────
 /**
- * The iframe is rendered at full size inside .player-iframe-wrap,
- * covered by a CSS overlay — so Chrome sees a "normal" visible video
- * and allows autoplay with audio, while the user never sees the video.
+ * Four-pillar strategy for reliable audio under Chrome's autoplay policy:
  *
- * play(videoId, startTime, duration, onEnded, onPlaybackStarted)
- *   onPlaybackStarted — called when PLAYING event fires (audio confirmed)
- *   onEnded           — called after duration seconds of actual playback
+ *   Pillar 1 — Iframe created MANUALLY with allow="autoplay; encrypted-media"
+ *     YT.Player creates its iframe internally, which means `allow` set in
+ *     onReady is read AFTER the iframe already loaded with default perms.
+ *     We create the iframe ourselves with the right attributes at birth,
+ *     then let YT.Player adopt it by passing the iframe's id.
  *
- * Fallback: if PLAYING never fires within 5 s, advance anyway.
+ *   Pillar 2 — cue(videoId, startTime)  [no gesture needed]
+ *     Calls cueVideoById — metadata + buffer, does NOT play.
+ *
+ *   Pillar 3 — play(duration, …)  [MUST be called inside onClick]
+ *     3a. mute() + playVideo() — muted autoplay is ALWAYS permitted,
+ *                                regardless of MEI or origin trust.
+ *     3b. On PLAYING state → unMute() + setVolume(100) — sticky activation
+ *         from the click extends to this callback, so unmute succeeds.
+ *
+ *   Pillar 4 (UX) — requestUnmute()  [called from a fresh user click]
+ *     If PlayerOverlay detects playback is still muted after 2 s, it shows
+ *     a "🔊 Activează sunetul" button. Clicking it calls this in a fresh
+ *     gesture context — last-ditch recovery for the edge cases where
+ *     sticky activation didn't propagate through the cross-origin iframe.
  */
 export function useYouTubePlayer(containerRef) {
   const playerRef    = useRef(null);
@@ -41,38 +54,44 @@ export function useYouTubePlayer(containerRef) {
     loadYouTubeIframeApi().then(() => {
       if (destroyed || !containerRef.current) return;
 
-      playerRef.current = new window.YT.Player(containerRef.current, {
-        // Full-size player — CSS overlay hides the video content.
-        // A visible, full-size iframe is required for Chrome to allow audio autoplay.
-        width:  '100%',
-        height: '100%',
-        playerVars: {
-          controls:       0,
-          disablekb:      1,
-          fs:             0,
-          iv_load_policy: 3,
-          modestbranding: 1,
-          rel:            0,
-          autoplay:       1,
-          playsinline:    1,
-          origin:         window.location.origin,
-        },
+      // ── Pillar 1: manual iframe with allow set at CREATION time ─────────
+      // Chrome reads `allow` once, at iframe load. Setting it later (e.g.
+      // in onReady) is effectively a no-op for already-loaded content.
+      const iframeId = 'yt-player-' + Math.random().toString(36).slice(2, 10);
+      const iframe = document.createElement('iframe');
+      iframe.id = iframeId;
+      iframe.setAttribute(
+        'allow',
+        'autoplay; encrypted-media; gyroscope; picture-in-picture',
+      );
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.setAttribute('frameborder', '0');
+      iframe.width  = '100%';
+      iframe.height = '100%';
+      iframe.style.border = '0';
+      iframe.style.display = 'block';
+
+      // playerVars must go in the src query string since YT.Player will
+      // adopt this iframe rather than generate a new one.
+      const params = new URLSearchParams({
+        enablejsapi:    '1',
+        origin:         window.location.origin,
+        controls:       '0',
+        disablekb:      '1',
+        fs:             '0',
+        iv_load_policy: '3',
+        modestbranding: '1',
+        rel:            '0',
+        playsinline:    '1',
+        autoplay:       '0',
+      });
+      iframe.src = `https://www.youtube.com/embed/?${params.toString()}`;
+
+      containerRef.current.appendChild(iframe);
+
+      playerRef.current = new window.YT.Player(iframeId, {
         events: {
-          onReady: (e) => {
-            // Explicitly add allow="autoplay" to the iframe Chrome created.
-            // This delegates the parent page's user-gesture context to the iframe,
-            // allowing unmuted playback after the user taps "▶ Ascultă".
-            try {
-              const iframe = e.target.getIframe();
-              if (iframe) {
-                iframe.setAttribute(
-                  'allow',
-                  'autoplay; encrypted-media; gyroscope; picture-in-picture',
-                );
-              }
-            } catch (_) {}
-            e.target.unMute();
-            e.target.setVolume(100);
+          onReady: () => {
             if (!destroyed) setIsReady(true);
           },
 
@@ -83,8 +102,13 @@ export function useYouTubePlayer(containerRef) {
             clipRef.current.consumed = true;
             clearTimeout(fallbackRef.current);
 
-            e.target.unMute();
-            e.target.setVolume(100);
+            // ── Pillar 3b: unmute after playback starts ───────────────────
+            // Sticky activation from the click that called playVideo()
+            // extends to the media element — unMute() is allowed here.
+            try {
+              e.target.unMute();
+              e.target.setVolume(100);
+            } catch (_) {}
 
             const { duration, onEnded, onPlaybackStarted } = clipRef.current;
             onPlaybackStarted?.();
@@ -104,7 +128,6 @@ export function useYouTubePlayer(containerRef) {
             clipRef.current = null;
             clearTimeout(stopTimerRef.current);
             clearTimeout(fallbackRef.current);
-            // Notify PlayerOverlay to show error message, then advance after 2 s.
             onPlayError?.();
             stopTimerRef.current = setTimeout(() => onEnded?.(), 2000);
           },
@@ -122,20 +145,33 @@ export function useYouTubePlayer(containerRef) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const play = useCallback((videoId, startTime, duration, onEnded, onPlaybackStarted, onPlayError) => {
+  /** Phase 1 — pre-buffer without playing. No gesture required. */
+  const cue = useCallback((videoId, startTime) => {
+    if (!playerRef.current) return;
+    try {
+      playerRef.current.cueVideoById({ videoId, startSeconds: startTime });
+    } catch (_) {}
+  }, []);
+
+  /** Phase 2 — start playback. MUST be called from inside an onClick handler. */
+  const play = useCallback((duration, onEnded, onPlaybackStarted, onPlayError) => {
     if (!playerRef.current) return;
 
     clearTimeout(stopTimerRef.current);
     clearTimeout(fallbackRef.current);
     clipRef.current = { duration, onEnded, onPlaybackStarted, onPlayError, consumed: false };
 
-    // Unmuted — allow="autoplay" on the iframe (set in onReady) delegates the
-    // parent page's tap gesture to the iframe, so Chrome permits unmuted play.
-    playerRef.current.unMute();
-    playerRef.current.setVolume(100);
-    playerRef.current.loadVideoById({ videoId, startSeconds: startTime });
+    // ── Pillar 3a: muted-start ────────────────────────────────────────────
+    // Chrome ALWAYS permits muted autoplay, regardless of MEI. By starting
+    // muted and unmuting in onStateChange(PLAYING), we transform an
+    // unreliable "play with sound" into a near-100% reliable "play muted,
+    // then unmute using sticky activation".
+    try {
+      playerRef.current.mute();
+      playerRef.current.playVideo();
+    } catch (_) {}
 
-    // Fallback if PLAYING event never fires (e.g. video unavailable).
+    // Safety net: if PLAYING never fires within 5 s, advance the round.
     fallbackRef.current = setTimeout(() => {
       if (!clipRef.current || clipRef.current.consumed) return;
       clipRef.current.consumed = true;
@@ -150,6 +186,23 @@ export function useYouTubePlayer(containerRef) {
     }, 5000);
   }, []);
 
+  /** Pillar 4 — last-ditch unmute from a fresh user gesture. */
+  const requestUnmute = useCallback(() => {
+    if (!playerRef.current) return;
+    try {
+      playerRef.current.unMute();
+      playerRef.current.setVolume(100);
+    } catch (_) {}
+  }, []);
+
+  /** Check mute state — used by UI to decide whether to show unmute button. */
+  const isMuted = useCallback(() => {
+    if (!playerRef.current) return false;
+    try {
+      return playerRef.current.isMuted() || playerRef.current.getVolume() === 0;
+    } catch (_) { return false; }
+  }, []);
+
   const stop = useCallback(() => {
     clearTimeout(stopTimerRef.current);
     clearTimeout(fallbackRef.current);
@@ -157,5 +210,5 @@ export function useYouTubePlayer(containerRef) {
     try { playerRef.current?.pauseVideo(); } catch (_) {}
   }, []);
 
-  return { isReady, play, stop };
+  return { isReady, cue, play, stop, requestUnmute, isMuted };
 }
