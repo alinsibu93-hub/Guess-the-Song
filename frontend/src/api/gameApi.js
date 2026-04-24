@@ -28,7 +28,7 @@ async function apiFetch(path, options = {}) {
 
 /**
  * POST /api/game/new
- * Creates a new game session and fetches all rounds from YouTube.
+ * Creates a new game session and fetches all rounds from iTunes.
  * This call can take 5–30 s depending on round count.
  *
  * @returns {{ sessionId, totalRounds, difficulty, mode, clipDuration, roundTimeout }}
@@ -60,7 +60,7 @@ export async function getCurrentRound(sessionId) {
  * Free-text payload:       { title: string, artist?: string }
  *
  * @returns {{ roundNumber, titleCorrect, artistCorrect, correctTitle,
- *             correctArtist, videoId, pointsEarned, totalScore, gameComplete }}
+ *             correctArtist, previewUrl, pointsEarned, totalScore, gameComplete }}
  */
 export async function submitAnswer(sessionId, payload) {
   return apiFetch(`/api/game/${sessionId}/answer`, {

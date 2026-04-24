@@ -2,17 +2,15 @@
 config.py — Central configuration for Guess the Song.
 """
 
-import os
 from dataclasses import dataclass, field
 from typing import List, Tuple
 
 
 @dataclass
 class GameConfig:
-    # ── YouTube API ────────────────────────────────────────────────────────
-    youtube_api_key: str = field(
-        default_factory=lambda: os.getenv("YOUTUBE_API_KEY", "")
-    )
+    # Audio source is iTunes Search API — no auth / API key required.
+    # (Previously used YouTube Data API v3; removed 2024-04 due to
+    # Chrome autoplay policy breaking playback reliability.)
 
     # ── Round settings ─────────────────────────────────────────────────────
     # total_rounds is intentionally absent — the client chooses it per-game (1-20).
@@ -31,8 +29,8 @@ class GameConfig:
     partial_match_threshold: float = 0.6
 
     # ── Song library ───────────────────────────────────────────────────────
-    # Known (artist, title) pairs used to query YouTube Data API v3.
-    # Having exact titles ensures the scoring logic knows what to expect.
+    # Known (artist, title) pairs used to query iTunes Search API.
+    # Exact titles ensure the scoring logic knows the canonical answer.
     song_library: List[Tuple[str, str]] = field(default_factory=lambda: [
         ("Daft Punk", "Get Lucky"),
         ("Daft Punk", "One More Time"),

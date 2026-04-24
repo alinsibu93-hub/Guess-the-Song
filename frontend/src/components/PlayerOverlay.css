@@ -1,12 +1,10 @@
 /*
  * PlayerOverlay.css
  *
- * Design intent: this zone should feel like a "listening room" —
- * dark, focused, minimal. The audio is the star; everything here
- * should fade into the background until the countdown needs attention.
- *
- * Anti-spoiler: the YouTube iframe is NEVER visible (off-screen at left:-9999px).
- * This overlay is 100% custom visual — no YouTube UI ever leaks through.
+ * Design intent: "listening room" — dark, focused, minimal. Audio source is
+ * a native <audio> element (iTunes preview URLs). No iframe, no anti-spoiler
+ * cover, no MEI headaches. The artwork is shown DURING playback so there's
+ * a visual anchor without revealing title/artist text.
  */
 
 .player-overlay {
@@ -15,7 +13,7 @@
   border: 1.5px solid var(--clr-border-subtle);
   border-radius: var(--radius-xl);
   margin-bottom: var(--space-6);
-  min-height: 160px;
+  min-height: 200px;
 
   display: flex;
   align-items: center;
@@ -25,31 +23,6 @@
   overflow: hidden;
 }
 
-/* ── iframe container — fills the overlay so Chrome sees a normal video ─── */
-/* Audio autoplay requires a visible, full-size iframe in the viewport.      */
-.player-iframe-wrap {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-}
-
-.player-iframe-wrap iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: block;
-}
-
-/* ── Cover — hides the video content (anti-spoiler) ─────────────────────── */
-/* Sits above the iframe, below the UI controls.                             */
-.player-cover {
-  position: absolute;
-  inset: 0;
-  background: var(--clr-surface);
-  border-radius: inherit;
-  z-index: 1;
-}
-
 /* Ambient radial gradient — appears during PLAYING state */
 .player-overlay::before {
   content: '';
@@ -57,7 +30,7 @@
   inset: 0;
   border-radius: inherit;
   background: radial-gradient(ellipse 70% 60% at 50% 50%,
-    rgba(108, 92, 231, 0.06) 0%,
+    rgba(108, 92, 231, 0.08) 0%,
     transparent 100%);
   opacity: 0;
   transition: opacity 0.6s ease;
@@ -68,7 +41,7 @@
   opacity: 1;
 }
 
-/* ── Visual container — above the cover layer ────────────────────────────── */
+/* ── Visual container ─────────────────────────────────────────────────────── */
 .player-visual {
   position: relative;
   z-index: 2;
@@ -79,6 +52,20 @@
   width: 100%;
   padding: var(--space-8) var(--space-6);
   animation: fadeSlideUp 0.3s var(--trans-normal);
+}
+
+/* ── Artwork (shown during playback) ─────────────────────────────────────── */
+/*
+ * Square iTunes artwork. Size tuned so it feels present but doesn't
+ * dominate the countdown. Rounded corners match the overlay aesthetic.
+ */
+.player-artwork {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  box-shadow: var(--shadow-md);
+  animation: popIn 0.4s var(--trans-spring);
 }
 
 /* ── Loading / init status ───────────────────────────────────────────────── */
@@ -92,9 +79,8 @@
 
 /* ── Waveform ────────────────────────────────────────────────────────────── */
 /*
- * 5 bars that animate at different speeds/delays.
- * scaleY(1) = full height; transform-origin bottom so bars grow upward.
- * The organic feel comes from each bar being slightly out of phase.
+ * 5 bars animating at different speeds/delays. Bars grow upward
+ * (transform-origin: bottom) for an organic feel.
  */
 .player-wave {
   display: flex;
@@ -113,7 +99,6 @@
   will-change: transform;
 }
 
-/* Each bar: different duration + delay = organic, non-mechanical feel */
 .wave-bar:nth-child(1) { animation-duration: 0.95s; animation-delay: 0.00s; }
 .wave-bar:nth-child(2) { animation-duration: 1.20s; animation-delay: 0.18s; background: var(--clr-primary-light); }
 .wave-bar:nth-child(3) { animation-duration: 0.85s; animation-delay: 0.35s; }
@@ -130,11 +115,6 @@
 }
 
 /* ── Countdown ────────────────────────────────────────────────────────────── */
-/*
- * Large, pulse-animated number. Beats once per second (animation-duration:1s)
- * so the player unconsciously tracks the remaining time.
- * At ≤3s, the .countdown--urgent modifier kicks in: faster + warm color.
- */
 .countdown {
   display: flex;
   align-items: baseline;
@@ -152,14 +132,13 @@
   line-height: 1;
   color: var(--clr-primary);
   font-variant-numeric: tabular-nums;
-  /* Prevent layout shift as digit count changes (1 ↔ 2 digits) */
   min-width: 2ch;
   text-align: center;
   transition: color var(--trans-normal);
 }
 
 .countdown--urgent .countdown-number {
-  color: #ff8a5c; /* warm orange — urgency without panic */
+  color: #ff8a5c;
 }
 
 .countdown-unit {
@@ -203,9 +182,8 @@
 
 /* ── Tap-to-play button ───────────────────────────────────────────────────── */
 /*
- * Chrome blocks autoplay with audio on sites the user hasn't visited before.
- * This button gives us a direct user gesture right before loadVideoById,
- * which is the only reliable way to unlock audio in all Chromium browsers.
+ * <audio>.play() succeeds from any user gesture — no delegation, no allow
+ * attributes, no postMessage. This button is the single gesture we need.
  */
 .tap-play-btn {
   padding: var(--space-4) var(--space-8);
@@ -231,42 +209,5 @@
 }
 
 .tap-play-btn:active {
-  transform: scale(0.97);
-}
-
-/* ── Unmute fallback button ──────────────────────────────────────────────── */
-/*
- * Shown only when playback has been running for 2+ seconds but the player
- * is still muted (sticky-activation unmute didn't land). Clicking it gives
- * us a fresh user gesture to force unmute — last-ditch recovery.
- */
-.unmute-btn {
-  margin-top: var(--space-2);
-  padding: 6px 14px;
-  background: transparent;
-  color: var(--clr-text-muted);
-  font-size: 0.78rem;
-  font-weight: var(--weight-medium);
-  border: 1px solid var(--clr-border-subtle);
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  opacity: 0.65;
-  transition:
-    opacity var(--trans-fast),
-    background var(--trans-fast),
-    color var(--trans-fast),
-    border-color var(--trans-fast),
-    transform var(--trans-fast);
-}
-
-.unmute-btn:hover {
-  opacity: 1;
-  background: rgba(108, 92, 231, 0.12);
-  color: var(--clr-primary-light);
-  border-color: var(--clr-primary);
-  transform: scale(1.03);
-}
-
-.unmute-btn:active {
   transform: scale(0.97);
 }

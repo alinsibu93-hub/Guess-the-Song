@@ -1,17 +1,20 @@
 """
 api.py — Flask REST API for Guess the Song.
 
-Contract (v1):
+Audio source: iTunes Search API (replaced YouTube IFrame 2024-04).
+Rationale: YouTube IFrame + Chrome autoplay policy produced ~40% audio
+reliability on low-MEI origins. iTunes previewUrls play in a native
+<audio> element with zero autoplay headaches.
+
+Contract (v2):
 
   POST /api/game/new
     → 201  { sessionId, totalRounds, difficulty, mode, clipDuration, roundTimeout }
     → 400  invalid params
-    → 401  bad API key
-    → 429  YouTube quota exceeded
-    → 502  YouTube unreachable
+    → 502  iTunes unreachable
 
   GET  /api/game/<id>/round
-    → 200  { roundNumber, totalRounds, videoId, startTime, duration, thumbnail, mode,
+    → 200  { roundNumber, totalRounds, previewUrl, duration, thumbnail, mode,
               choices? }   ← choices present only in multiple_choice mode
     → 200  { finished: true, totalRounds }   ← when all rounds answered
     → 404  session not found
@@ -20,7 +23,7 @@ Contract (v1):
     MC mode  body: { "choiceIndex": 2 }
     FT mode  body: { "title": "...", "artist": "..." }
     → 200  { roundNumber, titleCorrect, artistCorrect, correctTitle, correctArtist,
-              videoId, pointsEarned, totalScore, gameComplete }
+              previewUrl, pointsEarned, totalScore, gameComplete }
     → 400  game complete / wrong mode / bad index
     → 404  session not found
 
@@ -40,7 +43,7 @@ from flask_cors import CORS
 import game
 from config import GameConfig
 from game import ChoiceIndexError, EmptyGuessError, WrongModeError
-from youtube_service import YouTubeAuthError, YouTubeFetchError, YouTubeQuotaError, YouTubeService
+from itunes_service import iTunesFetchError, iTunesService
 
 app = Flask(__name__)
 
@@ -112,20 +115,16 @@ def new_game():
     config = GameConfig()
     config.apply_difficulty(difficulty)
 
-    # ── Fetch rounds from YouTube ──────────────────────────────────────────
+    # ── Fetch rounds from iTunes ───────────────────────────────────────────
     try:
-        service = YouTubeService(api_key=config.youtube_api_key)
+        service = iTunesService()
         round_data = service.fetch_rounds(
             config.song_library,
             rounds,
             choices_count=config.choices_count,
             clip_duration=config.clip_duration_seconds,
         )
-    except YouTubeAuthError as exc:
-        return jsonify({"error": str(exc)}), 401
-    except YouTubeQuotaError as exc:
-        return jsonify({"error": str(exc)}), 429
-    except YouTubeFetchError as exc:
+    except iTunesFetchError as exc:
         return jsonify({"error": str(exc)}), 502
 
     # ── Create session ─────────────────────────────────────────────────────

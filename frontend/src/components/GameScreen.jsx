@@ -161,13 +161,13 @@ export default function GameScreen({ session, onGameOver }) {
       )}
 
       {/* ── Audio player ──────────────────────────────────────────────────
-          Always mounted so the YouTube player stays alive across rounds.
-          `active` drives whether it actually plays.
+          Native <audio> element — plays iTunes preview URLs directly.
+          `active` drives whether the countdown runs and UI responds to events.
       */}
       <PlayerOverlay
-        videoId={round?.videoId}
-        startTime={round?.startTime ?? 0}
+        previewUrl={round?.previewUrl}
         duration={round?.duration ?? 8}
+        thumbnail={round?.thumbnail}
         active={uiState === S.PLAYING}
         onEnded={handlePlaybackEnd}
       />

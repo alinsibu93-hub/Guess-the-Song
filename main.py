@@ -21,15 +21,7 @@ def main() -> None:
     parser.add_argument("--debug", action="store_true", help="Enable Flask debug mode")
     args = parser.parse_args()
 
-    if not os.getenv("YOUTUBE_API_KEY"):
-        print("ERROR: YOUTUBE_API_KEY is not set.", file=sys.stderr)
-        print("Create a .env file with:  YOUTUBE_API_KEY=your_key_here", file=sys.stderr)
-        print(
-            "Get a key at: https://console.cloud.google.com/apis/library/youtube.googleapis.com",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
+    # iTunes Search API requires no key / auth — no env-var check needed.
     from api import app
     app.run(host=args.host, port=args.port, debug=args.debug)
 

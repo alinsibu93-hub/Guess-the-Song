@@ -5,7 +5,7 @@ import './StartScreen.css';
 // Loading messages shown progressively as POST /new takes time.
 const LOADING_MESSAGES = [
   'Se pregătesc piesele…',
-  'Se caută pe YouTube…',
+  'Se caută pe iTunes…',
   'Aproape gata…',
   'Durează mai mult ca de obicei…',
 ];
@@ -51,9 +51,7 @@ export default function StartScreen({ onStart }) {
   }
 
   function friendlyError(err) {
-    if (err.status === 401) return 'Cheia API YouTube lipsește sau este invalidă.';
-    if (err.status === 429) return 'Cota YouTube a fost depășită. Încearcă mâine.';
-    if (err.status === 502) return 'Nu am putut contacta YouTube. Verifică conexiunea.';
+    if (err.status === 502) return 'Nu am putut contacta iTunes. Verifică conexiunea.';
     return 'A apărut o eroare. Încearcă din nou.';
   }
 

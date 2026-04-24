@@ -88,8 +88,7 @@ class GameSession:
             "finished": False,
             "roundNumber": self.current_round + 1,
             "totalRounds": len(self.rounds),
-            "videoId": r["videoId"],
-            "startTime": r["startTime"],
+            "previewUrl": r["previewUrl"],
             "duration": r["duration"],
             "thumbnail": r.get("thumbnail"),
             "mode": self.mode,
@@ -165,7 +164,7 @@ class GameSession:
             "artistCorrect": artist_correct,
             "correctTitle": r["title"],
             "correctArtist": r["artist"],
-            "videoId": r["videoId"],
+            "previewUrl": r["previewUrl"],
             "pointsEarned": points,
             "totalScore": self.score,
         }

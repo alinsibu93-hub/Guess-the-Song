@@ -15,10 +15,12 @@ openapi: "3.0.3"
 #    free_text       — client sends title + artist; partial-match scoring.
 #    The mode is set at game creation and fixed for the whole session.
 #
-# 3. VIDEO DATA IS READ-ONLY.
-#    The backend resolves a YouTube videoId for each song and stores it.
-#    Playback is 100% client-side (YouTube IFrame Player API). The backend
-#    never downloads or streams audio/video.
+# 3. AUDIO DATA IS READ-ONLY.
+#    The backend resolves an iTunes previewUrl (30-second m4a) for each
+#    song and stores it. Playback is 100% client-side via HTML5 <audio>.
+#    The backend never downloads or streams the audio itself.
+#    (Previously used YouTube IFrame Player API; migrated 2024-04 due to
+#    Chrome autoplay policy reliability issues.)
 #
 # 4. TITLE/ARTIST ARE HIDDEN UNTIL ANSWER.
 #    GET /round intentionally omits the correct title and artist to prevent
@@ -244,7 +246,7 @@ paths:
                   value:
                     roundNumber: 2
                     totalRounds: 5
-                    videoId: JGwWNGJdvx8
+                    previewUrl: https://audio-ssl.itunes.apple.com/itunes-assets/preview.m4a
                     startTime: 42
                     duration: 7
                     thumbnail: "https://img.youtube.com/vi/JGwWNGJdvx8/default.jpg"
@@ -263,7 +265,7 @@ paths:
                   value:
                     roundNumber: 1
                     totalRounds: 5
-                    videoId: hT_nvWreIhg
+                    previewUrl: https://audio-ssl.itunes.apple.com/itunes-assets/preview2.m4a
                     startTime: 55
                     duration: 6
                     thumbnail: null
@@ -345,7 +347,7 @@ paths:
                     artistCorrect: true
                     correctTitle: Shape of You
                     correctArtist: Ed Sheeran
-                    videoId: JGwWNGJdvx8
+                    previewUrl: https://audio-ssl.itunes.apple.com/itunes-assets/preview.m4a
                     pointsEarned: 150
                     totalScore: 300
                     gameComplete: false
@@ -357,7 +359,7 @@ paths:
                     artistCorrect: false
                     correctTitle: Blinding Lights
                     correctArtist: The Weeknd
-                    videoId: 4NRXx6U8ABQ
+                    previewUrl: https://audio-ssl.itunes.apple.com/itunes-assets/preview3.m4a
                     pointsEarned: 0
                     totalScore: 300
                     gameComplete: false
@@ -369,7 +371,7 @@ paths:
                     artistCorrect: false
                     correctTitle: Bohemian Rhapsody
                     correctArtist: Queen
-                    videoId: fJ9rUzIMcZQ
+                    previewUrl: https://audio-ssl.itunes.apple.com/itunes-assets/preview4.m4a
                     pointsEarned: 100
                     totalScore: 550
                     gameComplete: true
@@ -446,7 +448,7 @@ paths:
                     artistCorrect: true
                     correctTitle: Shape of You
                     correctArtist: Ed Sheeran
-                    videoId: JGwWNGJdvx8
+                    previewUrl: https://audio-ssl.itunes.apple.com/itunes-assets/preview.m4a
                     pointsEarned: 150
                     totalScore: 150
                   - roundNumber: 2
@@ -454,7 +456,7 @@ paths:
                     artistCorrect: false
                     correctTitle: Yellow
                     correctArtist: Coldplay
-                    videoId: yKNxeF4KMsY
+                    previewUrl: https://audio-ssl.itunes.apple.com/itunes-assets/preview5.m4a
                     pointsEarned: 100
                     totalScore: 250
         "404":

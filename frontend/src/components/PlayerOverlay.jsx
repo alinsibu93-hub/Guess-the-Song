@@ -1,38 +1,59 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { useYouTubePlayer } from '../hooks/useYouTubePlayer';
 import './PlayerOverlay.css';
 
-export default function PlayerOverlay({ videoId, startTime, duration, active, onEnded }) {
-  const containerRef = useRef(null);
-  const { isReady, cue, play, stop, requestUnmute } = useYouTubePlayer(containerRef);
+/**
+ * PlayerOverlay — HTML5 <audio> player for iTunes preview URLs.
+ *
+ * Why not YouTube IFrame? Chrome's autoplay policy blocks unmuted audio on
+ * cross-origin iframes for low-MEI origins (any new Vercel/Netlify URL).
+ * We got ~40% reliability after exhaustive workarounds. Native <audio>
+ * plays reliably from any user gesture. No workarounds needed.
+ *
+ * Props:
+ *   previewUrl        — iTunes .m4a preview URL (30s clip)
+ *   duration          — seconds of the preview to play (8/15/3 by difficulty)
+ *   active            — whether this player is the currently-active round
+ *   onEnded           — callback when the clip finishes
+ *   thumbnail         — optional artwork URL (shown while playing)
+ */
+export default function PlayerOverlay({ previewUrl, duration, active, onEnded, thumbnail }) {
+  const audioRef    = useRef(null);
+  const stopTimerRef = useRef(null);
+  const endedCbRef   = useRef(onEnded);
 
   const [hasStarted,  setHasStarted]  = useState(false);
   const [isPlaying,   setIsPlaying]   = useState(false);
   const [hasError,    setHasError]    = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(null);
 
-  // Reset when a new round's video arrives.
+  // Keep the latest onEnded in a ref so stop timer uses the fresh closure.
+  useEffect(() => { endedCbRef.current = onEnded; }, [onEnded]);
+
+  // Reset when a new round's preview arrives.
   useEffect(() => {
     setHasStarted(false);
     setIsPlaying(false);
     setHasError(false);
     setSecondsLeft(null);
-    stop();
-  }, [videoId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Phase 1 — pre-buffer as soon as the player is ready and we have a video.
-  // No user gesture needed for cueVideoById; this maximises buffer before the tap.
-  useEffect(() => {
-    if (isReady && videoId && active) cue(videoId, startTime);
-  }, [isReady, videoId, startTime, active]); // eslint-disable-line react-hooks/exhaustive-deps
+    clearTimeout(stopTimerRef.current);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  }, [previewUrl]);
 
   // Stop if parent deactivates mid-clip.
-  useEffect(() => { if (!active) stop(); }, [active]); // eslint-disable-line
+  useEffect(() => {
+    if (!active && audioRef.current) {
+      audioRef.current.pause();
+      clearTimeout(stopTimerRef.current);
+    }
+  }, [active]);
 
   // Unmount cleanup.
-  useEffect(() => () => stop(), []); // eslint-disable-line
+  useEffect(() => () => clearTimeout(stopTimerRef.current), []);
 
-  // Visible countdown — ticks only after audio confirmed playing.
+  // Visible countdown — ticks only after audio is actually playing.
   useEffect(() => {
     if (!isPlaying) return;
     const tick = setInterval(() => {
@@ -44,77 +65,98 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
     return () => clearInterval(tick);
   }, [isPlaying]);
 
-  // Pillar 4 — ALWAYS-available unmute button during playback.
-  // We can't reliably detect actual audio output: YT API's isMuted() reports
-  // what the player *tried* to do, not what the browser honored. When Chrome
-  // silently blocks unmute on a low-MEI origin, YT still reports "unmuted"
-  // internally. So we surface the button for every playback session as a
-  // no-cost escape hatch — one tap in a fresh gesture guarantees audio.
-  const handleUnmuteClick = useCallback(() => {
-    requestUnmute();
-  }, [requestUnmute]);
-
-  // ── CRITICAL: play() called synchronously inside onClick ─────────────────
-  // Do NOT call play() via setState → useEffect. React scheduling (~100 ms)
-  // expires Chrome's user-gesture window and audio is blocked.
+  // ── play() — called directly from the onClick handler ────────────────────
+  // Browsers permit <audio>.play() from any user gesture, no ceremony.
   const handleTapPlay = useCallback(() => {
-    if (!isReady || !videoId || !active || hasStarted) return;
+    if (!previewUrl || !active || hasStarted) return;
     setHasStarted(true);
-    // Phase 2 — video is already buffered via cue(); just press play.
-    play(
-      duration,
-      () => { setIsPlaying(false); onEnded?.(); },
-      () => { setIsPlaying(true); setSecondsLeft(duration); },
-      () => { setHasError(true); },
-    );
-  }, [isReady, videoId, active, hasStarted, play, onEnded, duration]);
+    setHasError(false);
 
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const playPromise = audio.play();
+    // Older browsers don't return a promise; modern ones do.
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch((err) => {
+        console.warn('[audio] play() rejected:', err);
+        setHasError(true);
+        // Delay before advancing — lets user read the message.
+        stopTimerRef.current = setTimeout(() => endedCbRef.current?.(), 2000);
+      });
+    }
+  }, [previewUrl, active, hasStarted]);
+
+  // ── <audio> event handlers ───────────────────────────────────────────────
+  const handlePlaying = useCallback(() => {
+    setIsPlaying(true);
+    setSecondsLeft(duration);
+
+    // Schedule stop after `duration` seconds. Fresh timer per playback
+    // so pause/resume edges don't accumulate.
+    clearTimeout(stopTimerRef.current);
+    stopTimerRef.current = setTimeout(() => {
+      if (audioRef.current) audioRef.current.pause();
+      setIsPlaying(false);
+      endedCbRef.current?.();
+    }, duration * 1000);
+  }, [duration]);
+
+  const handleError = useCallback(() => {
+    console.warn('[audio] error event');
+    setHasError(true);
+    setIsPlaying(false);
+    clearTimeout(stopTimerRef.current);
+    stopTimerRef.current = setTimeout(() => endedCbRef.current?.(), 2000);
+  }, []);
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className={`player-overlay${active ? ' player-overlay--active' : ''}`}>
 
       {/*
-       * Anti-spoiler layout:
-       *   1. .player-iframe-wrap  — full-size, holds the real YouTube iframe
-       *   2. .player-cover        — dark CSS layer on top, hides video content
-       *   3. .player-visual       — our UI (button / waveform / countdown) above cover
+       * Native <audio> element. No autoplay — playback is triggered by the
+       * user clicking "▶ Ascultă". `preload="auto"` gives the browser a
+       * head start on buffering once we set src.
        *
-       * Why visible at full size: Chrome blocks audio autoplay for iframes that
-       * are outside the viewport or have display:none / opacity:0 / tiny size.
-       * Full-size + covered = audio allowed + video hidden.
+       * display:none is fine for <audio> (unlike iframes) — browsers never
+       * gate audio elements on visibility.
        */}
-      <div ref={containerRef} className="player-iframe-wrap" aria-hidden="true" />
-      <div className="player-cover" />
+      <audio
+        ref={audioRef}
+        src={previewUrl || undefined}
+        preload="auto"
+        onPlaying={handlePlaying}
+        onError={handleError}
+        style={{ display: 'none' }}
+      />
 
       <div className="player-visual">
-        {!isReady && (
-          <div className="player-status">
-            <span className="spinner--sm" />
-            <span>Se inițializează playerul...</span>
-          </div>
-        )}
-
-        {isReady && active && !hasStarted && (
+        {active && !hasStarted && previewUrl && (
           <button className="tap-play-btn" onClick={handleTapPlay} aria-label="Pornește clipul audio">
             ▶ Ascultă
           </button>
         )}
 
-        {isReady && active && hasStarted && !isPlaying && !hasError && (
+        {active && hasStarted && !isPlaying && !hasError && (
           <div className="player-status">
             <span className="spinner--sm" />
             <span>Se încarcă...</span>
           </div>
         )}
 
-        {isReady && active && hasError && (
+        {active && hasError && (
           <div className="player-error">
             <span className="player-error-icon">⚠️</span>
             <span>Piesa nu este disponibilă. Se avansează...</span>
           </div>
         )}
 
-        {isReady && active && isPlaying && (
+        {active && isPlaying && (
           <>
+            {thumbnail && (
+              <img className="player-artwork" src={thumbnail} alt="" />
+            )}
             <div className="player-wave" aria-label="Se redă audio">
               {[...Array(5)].map((_, i) => (
                 <span key={i} className="wave-bar" />
@@ -128,17 +170,10 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
               <span className="countdown-number">{secondsLeft ?? duration}</span>
               <span className="countdown-unit">s</span>
             </div>
-            <button
-              className="unmute-btn"
-              onClick={handleUnmuteClick}
-              aria-label="Activează sunetul dacă nu se aude"
-            >
-              🔊 Nu auzi? Apasă aici
-            </button>
           </>
         )}
 
-        {isReady && !active && (
+        {!active && (
           <div className="player-idle">
             <span className="player-idle-icon">🎧</span>
           </div>
