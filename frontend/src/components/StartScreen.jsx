@@ -10,6 +10,26 @@ const LOADING_MESSAGES = [
   'Durează mai mult ca de obicei…',
 ];
 
+const GENRE_OPTIONS = [
+  { key: 'pop',        label: 'Pop'        },
+  { key: 'rock',       label: 'Rock'       },
+  { key: 'hiphop',     label: 'Hip-Hop'    },
+  { key: 'rb',         label: 'R&B'        },
+  { key: 'electronic', label: 'Electronic' },
+  { key: 'metal',      label: 'Metal'      },
+  { key: 'indie',      label: 'Indie'      },
+  { key: 'latin',      label: 'Latin'      },
+  { key: 'kpop',       label: 'K-Pop'      },
+];
+
+const ERA_OPTIONS = [
+  { key: '80s',   label: '80s'   },
+  { key: '90s',   label: '90s'   },
+  { key: '2000s', label: '2000s' },
+  { key: '2010s', label: '2010s' },
+  { key: '2020s', label: '2020s' },
+];
+
 /**
  * Game configuration form. Calls POST /api/game/new on submit.
  *
@@ -18,13 +38,33 @@ const LOADING_MESSAGES = [
  */
 export default function StartScreen({ onStart }) {
   const [config, setConfig] = useState({
-    rounds: 5,
+    rounds:     5,
     difficulty: 'normal',
-    mode: 'multiple_choice',
+    mode:       'multiple_choice',
+    genres:     [],
+    eras:       [],
   });
-  const [loading, setLoading] = useState(false);
+  const [loading,  setLoading]  = useState(false);
   const [msgIndex, setMsgIndex] = useState(0);
-  const [error, setError] = useState(null);
+  const [error,    setError]    = useState(null);
+
+  function toggleGenre(key) {
+    setConfig(c => ({
+      ...c,
+      genres: c.genres.includes(key)
+        ? c.genres.filter(g => g !== key)
+        : [...c.genres, key],
+    }));
+  }
+
+  function toggleEra(key) {
+    setConfig(c => ({
+      ...c,
+      eras: c.eras.includes(key)
+        ? c.eras.filter(e => e !== key)
+        : [...c.eras, key],
+    }));
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -52,6 +92,7 @@ export default function StartScreen({ onStart }) {
 
   function friendlyError(err) {
     if (err.status === 502) return 'Nu am putut contacta iTunes. Verifică conexiunea.';
+    if (err.body?.error)    return err.body.error;
     return 'A apărut o eroare. Încearcă din nou.';
   }
 
@@ -61,7 +102,6 @@ export default function StartScreen({ onStart }) {
         <h1>🎵 Guess the Song</h1>
         <div className="spinner" />
         <p className="loading-msg">{LOADING_MESSAGES[Math.min(msgIndex, LOADING_MESSAGES.length - 1)]}</p>
-        {/* Allow cancel only after a long wait — avoids confusing quick users. */}
         {msgIndex >= 3 && (
           <button className="cancel-btn" onClick={() => setLoading(false)}>
             Anulează
@@ -137,6 +177,46 @@ export default function StartScreen({ onStart }) {
               </span>
             </label>
           ))}
+        </fieldset>
+
+        {/* ── Genres ──────────────────────────────────────────────────── */}
+        <fieldset className="field">
+          <legend>
+            Genuri
+            <span className="filter-hint">(opțional — implicit: toate)</span>
+          </legend>
+          <div className="toggle-group">
+            {GENRE_OPTIONS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={`toggle-btn${config.genres.includes(key) ? ' toggle-btn--on' : ''}`}
+                onClick={() => toggleGenre(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        {/* ── Eras ────────────────────────────────────────────────────── */}
+        <fieldset className="field">
+          <legend>
+            Epoci
+            <span className="filter-hint">(opțional — implicit: toate)</span>
+          </legend>
+          <div className="toggle-group">
+            {ERA_OPTIONS.map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                className={`toggle-btn${config.eras.includes(key) ? ' toggle-btn--on' : ''}`}
+                onClick={() => toggleEra(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </fieldset>
 
         {error && <p className="form-error" role="alert">⚠️ {error}</p>}

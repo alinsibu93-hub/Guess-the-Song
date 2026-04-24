@@ -41,7 +41,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 import game
-from config import GameConfig
+from config import ERAS, GENRES, RELATED_GENRES, SONG_LIBRARY, GameConfig
 from game import ChoiceIndexError, EmptyGuessError, WrongModeError
 from itunes_service import iTunesFetchError, iTunesService
 
@@ -96,6 +96,26 @@ def new_game():
     difficulty = str(data.get("difficulty", "normal"))
     mode = str(data.get("mode", "multiple_choice"))
 
+    # ── genres / eras (optional multi-select filters) ──────────────────────
+    genres_raw = data.get("genres", [])
+    eras_raw   = data.get("eras", [])
+
+    if not isinstance(genres_raw, list):
+        return jsonify({"error": "'genres' must be a list"}), 400
+    if not isinstance(eras_raw, list):
+        return jsonify({"error": "'eras' must be a list"}), 400
+
+    invalid_genres = [g for g in genres_raw if g not in GENRES]
+    invalid_eras   = [e for e in eras_raw   if e not in ERAS]
+    if invalid_genres:
+        return jsonify({"error": f"Invalid genres: {invalid_genres}. Valid: {GENRES}"}), 400
+    if invalid_eras:
+        return jsonify({"error": f"Invalid eras: {invalid_eras}. Valid: {ERAS}"}), 400
+
+    # Empty list ⟹ no filter (all genres / all eras)
+    genres = genres_raw or None
+    eras   = eras_raw   or None
+
     if rounds < 1 or rounds > 20:
         return jsonify({"error": "'rounds' must be between 1 and 20"}), 400
     if difficulty not in _VALID_DIFFICULTIES:
@@ -111,10 +131,13 @@ def new_game():
     try:
         service = iTunesService()
         round_data = service.fetch_rounds(
-            config.song_library,
+            SONG_LIBRARY,
             rounds,
             choices_count=config.choices_count,
             clip_duration=config.clip_duration_seconds,
+            genres=genres,
+            eras=eras,
+            related_genres_map=RELATED_GENRES,
         )
     except iTunesFetchError as exc:
         return jsonify({"error": str(exc)}), 502

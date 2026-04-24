@@ -17,9 +17,13 @@ import random
 import re
 import requests
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional
 
 ITUNES_SEARCH_URL = "https://itunes.apple.com/search"
+
+# Minimum pool size before triggering genre/era fallback logic.
+# Needs to comfortably cover `count` rounds + distractor generation.
+_MIN_POOL = 12
 
 
 # ── Data classes & exceptions ──────────────────────────────────────────────
@@ -79,14 +83,107 @@ def _item_to_track_info(item: dict, title: str, artist: str) -> Optional[TrackIn
     )
 
 
+# ── Song pool filtering ────────────────────────────────────────────────────
+
+
+def _build_song_pool(
+    song_library: List[Dict[str, str]],
+    genres: Optional[List[str]],
+    eras: Optional[List[str]],
+    count: int,
+    choices_count: int,
+    related_genres_map: Dict[str, List[str]],
+) -> List[Dict[str, str]]:
+    """
+    Return a candidate pool from song_library that satisfies the genre/era
+    filter, with progressive fallback when the pool is too small.
+
+    Minimum needed: enough to play `count` rounds AND generate `choices_count`
+    distractors. We use _MIN_POOL as a floor for robustness against iTunes
+    lookup failures.
+
+    Fallback order:
+      1. Songs matching BOTH selected genres AND selected eras  (exact)
+      2. Add songs from related genres, keeping era filter      (related genres)
+      3. Remove era filter, keep original genre filter          (genre-only)
+      4. Full library                                           (no filter)
+    """
+    min_needed = max(count + choices_count, _MIN_POOL)
+
+    # No filters → whole library
+    if not genres and not eras:
+        return list(song_library)
+
+    genres_set = set(genres) if genres else None
+    eras_set   = set(eras)   if eras   else None
+
+    def genre_ok(song: dict) -> bool:
+        return genres_set is None or song["genre"] in genres_set
+
+    def era_ok(song: dict) -> bool:
+        return eras_set is None or song["era"] in eras_set
+
+    # Step 1 — exact filter
+    pool = [s for s in song_library if genre_ok(s) and era_ok(s)]
+    if len(pool) >= min_needed:
+        return pool
+
+    # Step 2 — add related genres (era filter kept)
+    if genres_set:
+        related: set = set()
+        for g in genres_set:
+            related.update(related_genres_map.get(g, []))
+        related -= genres_set  # avoid re-adding already-selected genres
+
+        expanded = genres_set | related
+        pool = [s for s in song_library
+                if s["genre"] in expanded and era_ok(s)]
+        if len(pool) >= min_needed:
+            return pool
+
+    # Step 3 — relax era, keep original genres
+    if eras_set and genres_set:
+        pool = [s for s in song_library if s["genre"] in genres_set]
+        if len(pool) >= min_needed:
+            return pool
+
+    # Step 4 — full library
+    return list(song_library)
+
+
+# ── Distractor generation ──────────────────────────────────────────────────
+
+
+def _generate_choices(
+    correct_title: str,
+    correct_artist: str,
+    pool: List[Dict[str, str]],
+    count: int = 4,
+) -> List[dict]:
+    """
+    Build a multiple-choice list of `count` options from pool.
+    Always includes the correct answer; the rest are random distractors.
+    """
+    distractors = [
+        {"title": s["title"], "artist": s["artist"]}
+        for s in pool
+        if not (s["title"] == correct_title and s["artist"] == correct_artist)
+    ]
+    random.shuffle(distractors)
+
+    n_wrong = min(count - 1, len(distractors))
+    choices = distractors[:n_wrong]
+    choices.append({"title": correct_title, "artist": correct_artist})
+    random.shuffle(choices)
+    return choices
+
+
 # ── Service ────────────────────────────────────────────────────────────────
 
 
 class iTunesService:
     """
-    Stateless wrapper around the iTunes Search API. No auth needed, so
-    there's no api_key argument — constructor is a no-op for symmetry
-    with the previous YouTubeService.
+    Stateless wrapper around the iTunes Search API. No auth needed.
     """
 
     def search_track(self, artist: str, title: str) -> Optional[TrackInfo]:
@@ -96,10 +193,8 @@ class iTunesService:
 
         Matching strategy:
           1. Exact (fuzzy) title match among top 5 results — best signal.
-          2. Fallback: first result with a previewUrl (sometimes Apple's
-             relevance ranking beats title matching).
-          3. None if no result has a previewUrl (rare — some obscure or
-             region-restricted tracks lack previews).
+          2. Fallback: first result with a previewUrl.
+          3. None if no result has a previewUrl.
         """
         params = {
             "term":   f"{artist} {title}",
@@ -139,47 +234,57 @@ class iTunesService:
 
     def fetch_rounds(
         self,
-        song_library: List[Tuple[str, str]],
+        song_library: List[Dict[str, str]],
         count: int,
         choices_count: int = 4,
         clip_duration: int = 8,
+        genres: Optional[List[str]] = None,
+        eras: Optional[List[str]] = None,
+        related_genres_map: Optional[Dict[str, List[str]]] = None,
     ) -> List[dict]:
         """
-        Resolve `count` unique (artist, title) pairs from song_library via iTunes.
+        Resolve `count` unique tracks from song_library via iTunes.
 
-        Returns round dicts with the same shape the game engine expects,
-        except the "videoId"/"startTime" pair is replaced by "previewUrl":
+        genres / eras filter which songs are eligible. If the filtered pool
+        is too small, _build_song_pool automatically widens the search.
 
+        Returns round dicts:
             {
               title, artist,
               previewUrl,   ← played by <audio src=...> on the frontend
-              duration,     ← how many seconds of the 30s preview to play
+              duration,     ← seconds of the 30s preview to play
               thumbnail,    ← 300x300 iTunes artwork
-              choices       ← multiple-choice options
+              choices       ← multiple-choice options (list of {title, artist})
             }
-
-        Since iTunes previews are pre-selected to be the chorus / most
-        recognisable section, we play from second 0 of the preview — no
-        random startTime needed (and no chance of landing on silence).
         """
         if not song_library:
             raise iTunesFetchError("song_library is empty — nothing to search for.")
-        if len(song_library) < choices_count:
+
+        pool = _build_song_pool(
+            song_library,
+            genres,
+            eras,
+            count,
+            choices_count,
+            related_genres_map or {},
+        )
+
+        if len(pool) < choices_count:
             raise iTunesFetchError(
-                f"song_library has {len(song_library)} songs but choices_count={choices_count} "
-                f"requires at least {choices_count}. Add more songs or reduce choices_count."
+                f"Song pool has only {len(pool)} songs but choices_count={choices_count}. "
+                "Add more songs or reduce choices_count."
             )
 
-        candidates = list(song_library)
+        candidates = list(pool)
         random.shuffle(candidates)
 
         seen_previews: set = set()
         rounds: List[dict] = []
 
-        for artist, title in candidates:
+        for song in candidates:
             if len(rounds) >= count:
                 break
-            track = self.search_track(artist, title)
+            track = self.search_track(song["artist"], song["title"])
             if track is None or track.preview_url in seen_previews:
                 continue
             seen_previews.add(track.preview_url)
@@ -190,37 +295,14 @@ class iTunesService:
                 "duration":   clip_duration,
                 "thumbnail":  track.artwork_url,
                 "choices":    _generate_choices(
-                    track.title, track.artist, song_library, choices_count
+                    track.title, track.artist, pool, choices_count
                 ),
             })
 
         if len(rounds) < count:
             raise iTunesFetchError(
-                f"Could only find {len(rounds)} tracks on iTunes, needed {count}. "
-                "Add more songs to the library or reduce the round count."
+                f"Could only find {len(rounds)} tracks on iTunes (needed {count}). "
+                "Try selecting different genres/eras, or reduce the round count."
             )
 
         return rounds
-
-
-# ── Distractor generation (unchanged from youtube_service) ─────────────────
-
-
-def _generate_choices(
-    correct_title: str,
-    correct_artist: str,
-    song_library: List[Tuple[str, str]],
-    count: int = 4,
-) -> List[dict]:
-    distractors = [
-        {"title": t, "artist": a}
-        for a, t in song_library
-        if not (t == correct_title and a == correct_artist)
-    ]
-    random.shuffle(distractors)
-
-    n_wrong = min(count - 1, len(distractors))
-    choices = distractors[:n_wrong]
-    choices.append({"title": correct_title, "artist": correct_artist})
-    random.shuffle(choices)
-    return choices

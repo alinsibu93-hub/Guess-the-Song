@@ -33,10 +33,16 @@ async function apiFetch(path, options = {}) {
  *
  * @returns {{ sessionId, totalRounds, difficulty, mode, clipDuration, roundTimeout }}
  */
-export async function startGame({ rounds = 5, difficulty = 'normal', mode = 'multiple_choice' } = {}) {
+export async function startGame({
+  rounds     = 5,
+  difficulty = 'normal',
+  mode       = 'multiple_choice',
+  genres     = [],
+  eras       = [],
+} = {}) {
   return apiFetch('/api/game/new', {
     method: 'POST',
-    body: JSON.stringify({ rounds, difficulty, mode }),
+    body: JSON.stringify({ rounds, difficulty, mode, genres, eras }),
   });
 }
 
