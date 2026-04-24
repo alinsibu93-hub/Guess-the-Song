@@ -68,6 +68,67 @@
   animation: popIn 0.4s var(--trans-spring);
 }
 
+/* ── Vinyl disc ──────────────────────────────────────────────────────────── */
+/*
+ * Pure-CSS spinning vinyl record. Three layers:
+ *   .vinyl         — outer disc (dark, concentric groove rings via repeating-radial-gradient)
+ *   .vinyl__label  — coloured centre label (violet gradient)
+ *   .vinyl__hole   — small centre hole
+ *
+ * The disc spins at 1.8 rpm (33⅓ rpm look-alike slowed for aesthetics).
+ * A subtle drop-shadow makes it feel lifted off the card.
+ */
+.vinyl {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      circle at center,
+      #1a1a2e 0px,
+      #1a1a2e 3px,
+      #111120 3px,
+      #111120 6px
+    );
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.55),
+    0 0 0 1.5px rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: vinylSpin 1.8s linear infinite;
+  will-change: transform;
+  flex-shrink: 0;
+}
+
+.vinyl__label {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%,
+    #8b7cf8 0%,
+    #6c5ce7 45%,
+    #4a3ab8 100%
+  );
+  box-shadow: inset 0 1px 3px rgba(255,255,255,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vinyl__hole {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--clr-bg, #0d0d1a);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.8);
+}
+
+@keyframes vinylSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ── Loading / init status ───────────────────────────────────────────────── */
 .player-status {
   display: flex;

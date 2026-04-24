@@ -154,9 +154,11 @@ export default function PlayerOverlay({ previewUrl, duration, active, onEnded, t
 
         {active && isPlaying && (
           <>
-            {thumbnail && (
-              <img className="player-artwork" src={thumbnail} alt="" />
-            )}
+            <div className="vinyl" aria-hidden="true">
+              <div className="vinyl__label">
+                <div className="vinyl__hole" />
+              </div>
+            </div>
             <div className="player-wave" aria-label="Se redă audio">
               {[...Array(5)].map((_, i) => (
                 <span key={i} className="wave-bar" />
