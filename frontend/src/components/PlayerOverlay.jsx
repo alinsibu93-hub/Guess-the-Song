@@ -4,13 +4,12 @@ import './PlayerOverlay.css';
 
 export default function PlayerOverlay({ videoId, startTime, duration, active, onEnded }) {
   const containerRef = useRef(null);
-  const { isReady, cue, play, stop, requestUnmute, isMuted } = useYouTubePlayer(containerRef);
+  const { isReady, cue, play, stop, requestUnmute } = useYouTubePlayer(containerRef);
 
   const [hasStarted,  setHasStarted]  = useState(false);
   const [isPlaying,   setIsPlaying]   = useState(false);
   const [hasError,    setHasError]    = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(null);
-  const [needsUnmute, setNeedsUnmute] = useState(false);
 
   // Reset when a new round's video arrives.
   useEffect(() => {
@@ -18,7 +17,6 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
     setIsPlaying(false);
     setHasError(false);
     setSecondsLeft(null);
-    setNeedsUnmute(false);
     stop();
   }, [videoId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -46,20 +44,14 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
     return () => clearInterval(tick);
   }, [isPlaying]);
 
-  // Pillar 4 — after 2 s of playback, check if still muted. If yes, the
-  // sticky-activation unmute in onStateChange didn't land (rare edge case
-  // on new/low-MEI origins). Show a fresh-gesture unmute button.
-  useEffect(() => {
-    if (!isPlaying) return;
-    const t = setTimeout(() => {
-      if (isMuted()) setNeedsUnmute(true);
-    }, 2000);
-    return () => clearTimeout(t);
-  }, [isPlaying, isMuted]);
-
+  // Pillar 4 — ALWAYS-available unmute button during playback.
+  // We can't reliably detect actual audio output: YT API's isMuted() reports
+  // what the player *tried* to do, not what the browser honored. When Chrome
+  // silently blocks unmute on a low-MEI origin, YT still reports "unmuted"
+  // internally. So we surface the button for every playback session as a
+  // no-cost escape hatch — one tap in a fresh gesture guarantees audio.
   const handleUnmuteClick = useCallback(() => {
     requestUnmute();
-    setNeedsUnmute(false);
   }, [requestUnmute]);
 
   // ── CRITICAL: play() called synchronously inside onClick ─────────────────
@@ -136,15 +128,13 @@ export default function PlayerOverlay({ videoId, startTime, duration, active, on
               <span className="countdown-number">{secondsLeft ?? duration}</span>
               <span className="countdown-unit">s</span>
             </div>
-            {needsUnmute && (
-              <button
-                className="unmute-btn"
-                onClick={handleUnmuteClick}
-                aria-label="Activează sunetul"
-              >
-                🔊 Activează sunetul
-              </button>
-            )}
+            <button
+              className="unmute-btn"
+              onClick={handleUnmuteClick}
+              aria-label="Activează sunetul dacă nu se aude"
+            >
+              🔊 Nu auzi? Apasă aici
+            </button>
           </>
         )}
 

@@ -242,25 +242,29 @@
  */
 .unmute-btn {
   margin-top: var(--space-2);
-  padding: var(--space-2) var(--space-5);
+  padding: 6px 14px;
   background: transparent;
-  color: var(--clr-primary-light);
-  font-size: var(--text-sm);
+  color: var(--clr-text-muted);
+  font-size: 0.78rem;
   font-weight: var(--weight-medium);
-  border: 1.5px solid var(--clr-primary);
+  border: 1px solid var(--clr-border-subtle);
   border-radius: var(--radius-full);
   cursor: pointer;
+  opacity: 0.65;
   transition:
+    opacity var(--trans-fast),
     background var(--trans-fast),
     color var(--trans-fast),
+    border-color var(--trans-fast),
     transform var(--trans-fast);
-  animation: fadeSlideUp 0.3s var(--trans-normal);
 }
 
 .unmute-btn:hover {
-  background: var(--clr-primary);
-  color: var(--clr-text-inverse);
-  transform: scale(1.04);
+  opacity: 1;
+  background: rgba(108, 92, 231, 0.12);
+  color: var(--clr-primary-light);
+  border-color: var(--clr-primary);
+  transform: scale(1.03);
 }
 
 .unmute-btn:active {
