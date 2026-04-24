@@ -36,7 +36,6 @@ Contract (v2):
 """
 
 import os
-import re
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -49,29 +48,15 @@ from itunes_service import iTunesFetchError, iTunesService
 app = Flask(__name__)
 
 # ── CORS ───────────────────────────────────────────────────────────────────
-# Origins are read from CORS_ALLOWED_ORIGINS (comma-separated exact origins).
-# Additionally, ALL *.vercel.app subdomains are whitelisted via regex so that
-# Vercel's per-deploy preview URLs work without manual updates on each deploy.
-#
-# Development:  CORS_ALLOWED_ORIGINS=http://localhost:3000
-# Production:   CORS_ALLOWED_ORIGINS=https://myapp.com
-# Multiple:     CORS_ALLOWED_ORIGINS=http://localhost:3000,https://myapp.com
-
-_raw_origins = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
-_exact_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
-
-# Regex that matches any https://*.vercel.app — covers all Vercel deployments.
-_VERCEL_RE = re.compile(r"^https://[a-zA-Z0-9-]+\.vercel\.app$")
-
-
-def _origin_allowed(origin: str) -> bool:
-    return origin in _exact_origins or bool(_VERCEL_RE.match(origin))
-
+# This is a public game with no authentication or sensitive user data.
+# We allow all origins ("*") so that any Vercel preview URL, local dev
+# server, or future domain works without manual config changes.
+# If auth is ever added, restrict this to specific origins.
 
 CORS(
     app,
     resources={r"/api/*": {
-        "origins": _origin_allowed,
+        "origins": "*",
         "methods": ["GET", "POST"],
         "allow_headers": ["Content-Type"],
     }},
