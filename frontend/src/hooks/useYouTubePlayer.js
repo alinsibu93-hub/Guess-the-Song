@@ -102,9 +102,10 @@ export function useYouTubePlayer(containerRef) {
             clipRef.current.consumed = true;
             clearTimeout(fallbackRef.current);
 
-            // ── Pillar 3b: unmute after playback starts ───────────────────
-            // Sticky activation from the click that called playVideo()
-            // extends to the media element — unMute() is allowed here.
+            // ── Pillar 3b: redundant unmute ───────────────────────────────
+            // Belt-and-suspenders — if the unmute in play() didn't land
+            // (edge case: very delayed buffering), try again here inside
+            // sticky activation from the media element itself.
             try {
               e.target.unMute();
               e.target.setVolume(100);
@@ -161,13 +162,19 @@ export function useYouTubePlayer(containerRef) {
     clearTimeout(fallbackRef.current);
     clipRef.current = { duration, onEnded, onPlaybackStarted, onPlayError, consumed: false };
 
-    // ── Pillar 3a: muted-start ────────────────────────────────────────────
-    // Chrome ALWAYS permits muted autoplay, regardless of MEI. By starting
-    // muted and unmuting in onStateChange(PLAYING), we transform an
-    // unreliable "play with sound" into a near-100% reliable "play muted,
-    // then unmute using sticky activation".
+    // ── Pillar 3a: UNMUTED-start in the same gesture ────────────────────
+    // Critical insight: Chrome treats muted-autoplay and unmuted-play as
+    // separate permission classes. Once a cross-origin iframe media starts
+    // MUTED, Chrome refuses any subsequent unMute(), even from a fresh
+    // gesture — empirically confirmed on low-MEI origins.
+    //
+    // Instead, we issue unMute() + setVolume(100) + playVideo() all within
+    // the same onClick gesture. With allow="autoplay" set at iframe
+    // creation (Pillar 1), Chrome delegates the parent gesture to the
+    // iframe and permits unmuted playback.
     try {
-      playerRef.current.mute();
+      playerRef.current.unMute();
+      playerRef.current.setVolume(100);
       playerRef.current.playVideo();
     } catch (_) {}
 
